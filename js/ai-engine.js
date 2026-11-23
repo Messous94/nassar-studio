@@ -1,16 +1,13 @@
 /**
  * ============================================================================
  * js/ai-engine.js
- * Token-Efficient Gemini API Engine
- * - Compact Context Routing (sends only minimal required state per action)
- * - Structured JSON Output for 8-Post Calendar, Single Post, and Insights
- * - On-Demand Reference Image Generation
- * - Google Search Grounding for Meta & Google Ads Official Rules Updates
+ * Token-Efficient Gemini API Engine (Updated to Gemini 3 Flash with Auto-Fallback)
  * ============================================================================
  */
 
 const AIEngine = (() => {
-  const TEXT_MODEL = 'gemini-3.8-flash';
+  // Primary and fallback models for text/JSON generation
+  const TEXT_MODELS = ['gemini-3-flash-preview', 'gemini-3.0-flash', 'gemini-2.0-flash'];
   const IMAGE_MODEL = 'imagen-3.0-generate-002';
 
   function getApiKey() {
@@ -28,7 +25,6 @@ const AIEngine = (() => {
     const materialsList = (core.materials || []).join(', ');
     const offersSummary = (core.offers || []).map(o => `- ${o.title} (${o.segment}): ${o.details}`).join('\n');
 
-    // Summarize ideas by saturation state
     const approvedIdeas = (ws.ideas || []).filter(i => i.status === 'approved');
     const unsaturated = approvedIdeas.filter(i => i.saturation < 75).map(i => `[ID:${i.id}] ${i.title} (تشبع:${i.saturation}%)`).join(' | ');
     const saturated = approvedIdeas.filter(i => i.saturation >= 75).map(i => i.title).join(' | ');
@@ -54,10 +50,38 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
 `.trim();
   }
 
-  async function callGeminiJSON(promptText, systemInstruction = '') {
+  // Calls Gemini with automatic model fallback if a model version is deprecated
+  async function fetchGeminiWithFallback(payload, useSearch = false) {
     const apiKey = getApiKey();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    let lastError = '';
 
+    for (const model of TEXT_MODELS) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          return await res.json();
+        }
+
+        const errText = await res.text();
+        lastError = `(${res.status}): ${errText}`;
+        // If 404 (model not found), try next model in array
+        if (res.status === 404) continue;
+        throw new Error(`Gemini API Error ${lastError}`);
+      } catch (e) {
+        if (e.message.includes('404')) continue;
+        throw e;
+      }
+    }
+    throw new Error(`تعذر الاتصال بنماذج Gemini المتاحة. آخر خطأ: ${lastError}`);
+  }
+
+  async function callGeminiJSON(promptText, systemInstruction = '') {
     const payload = {
       contents: [{ role: 'user', parts: [{ text: promptText }] }],
       generationConfig: {
@@ -72,25 +96,13 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
       };
     }
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Gemini API Error (${res.status}): ${err}`);
-    }
-
-    const data = await res.json();
+    const data = await fetchGeminiWithFallback(payload);
     const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) throw new Error('لم يتم استلام رد صالح من Gemini API.');
 
     try {
       return JSON.parse(rawText);
     } catch (e) {
-      // Fallback cleanup if markdown fences leaked
       const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
       return JSON.parse(cleaned);
     }
@@ -199,7 +211,6 @@ ${context}
     const apiKey = getApiKey();
     const prompt = `Architectural luxury interior photography, ${post.material || 'natural quartz stone surface'}, ${post.visualDirection}. Color palette: ${post.colorPalette}. Mood: ${post.mood}. Quiet luxury aesthetic, soft natural directional lighting, ultra clean composition, 8k photorealistic, no text, no watermarks.`;
 
-    // Try Imagen 3 endpoint first
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:predict?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, {
       method: 'POST',
@@ -223,9 +234,6 @@ ${context}
 
   // 5. Google Search Grounding to Update Meta & Google Official Rules
   async function searchAndUpdatePlatformRules() {
-    const apiKey = getApiKey();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
     const prompt = `
 ابحث في التحديثات الرسمية الحديثة لمنصات Meta Ads (مثل تحديثات Andromeda, Advantage+, Creative Diversification, Learning Phase) و Google Ads (Performance Max, Search Bidding) وممارسات الميديا بايرز الموثوقة.
 لخص أهم 6 قواعد عملية ومباشرة باللغة العربية تُستخدم لتشخيص الحملات الإعلانية اليومية واتخاذ قرارات (إيقاف / تعديل / زيادة ميزانية).
@@ -238,18 +246,7 @@ ${context}
       generationConfig: { temperature: 0.3 }
     };
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Search API Error (${res.status}): ${err}`);
-    }
-
-    const data = await res.json();
+    const data = await fetchGeminiWithFallback(payload, true);
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const lines = text
       .split('\n')
