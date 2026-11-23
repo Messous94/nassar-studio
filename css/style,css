@@ -1,0 +1,101 @@
+/* ==========================================================================
+Nassar Stone — Marketing & Content Intelligence Studio
+Design System: Quiet Luxury (Warm Alabaster, Deep Charcoal, Muted Bronze)
+========================================================================== */
+:root {
+--bg-stone: #F8F7F4;
+--bg-surface: #FFFFFF;
+--text-ink: #141413;
+--text-muted: #6E6D68;
+--border-subtle: #E6E4DD;
+--accent-bronze: #9A7B4F;
+--accent-bronze-soft: #F5EFE6;
+--status-green: #15803D;
+--status-amber: #D97706;
+--status-red: #B91C1C;
+}
+{
+box-sizing: border-box;
+}
+body {
+background-color: var(--bg-stone);
+color: var(--text-ink);
+font-family: 'Cairo', sans-serif;
+margin: 0;
+padding: 0;
+-webkit-font-smoothing: antialiased;
+}
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+width: 6px;
+height: 6px;
+}
+::-webkit-scrollbar-track {
+background: var(--bg-stone);
+}
+::-webkit-scrollbar-thumb {
+background: #D5D2C8;
+border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+background: var(--accent-bronze);
+}
+.no-scrollbar::-webkit-scrollbar {
+display: none;
+}
+.no-scrollbar {
+-ms-overflow-style: none;
+scrollbar-width: none;
+}
+/* Surfaces & Cards */
+.glass-card {
+background: var(--bg-surface);
+border: 1px solid var(--border-subtle);
+box-shadow: 0 1px 3px rgba(20, 20, 19, 0.03);
+}
+/* Navigation Tabs */
+.tab-btn {
+color: var(--text-muted);
+transition: all 0.15s ease;
+}
+.tab-btn:hover {
+color: var(--text-ink);
+background-color: var(--bg-stone);
+}
+.tab-btn.active {
+background-color: var(--text-ink);
+color: #FFFFFF;
+}
+/* Loading Spinner */
+.spinner {
+width: 16px;
+height: 16px;
+border: 2px solid rgba(255, 255, 255, 0.3);
+border-top-color: #FFFFFF;
+border-radius: 50%;
+animation: spin 0.7s linear infinite;
+display: inline-block;
+}
+.spinner-dark {
+border-color: rgba(20, 20, 19, 0.15);
+border-top-color: var(--text-ink);
+}
+@keyframes spin {
+to { transform: rotate(360deg); }
+}
+/* Saturation Progress Bar */
+.sat-bar {
+height: 6px;
+border-radius: 999px;
+background-color: #ECEAE3;
+overflow: hidden;
+}
+.sat-fill {
+height: 100%;
+transition: width 0.3s ease;
+}
+/* Modal Backdrop */
+.modal-backdrop {
+background-color: rgba(20, 20, 19, 0.55);
+backdrop-filter: blur(2px);
+}
