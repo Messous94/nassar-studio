@@ -10,7 +10,7 @@
  */
 
 const AIEngine = (() => {
-  const TEXT_MODEL = 'gemini-2.5-flash';
+  const TEXT_MODEL = 'gemini-3.8-flash';
   const IMAGE_MODEL = 'imagen-3.0-generate-002';
 
   function getApiKey() {
