@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nassar Stone — Marketing & Content Intelligence Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Cairo', 'sans-serif'] },
+          colors: {
+            stoneBg: '#F8F7F4',
+            surface: '#FFFFFF',
+            ink: '#141413',
+            muted: '#6E6D68',
+            borderSubtle: '#E6E4DD',
+            bronze: '#9A7B4F',
+            bronzeSoft: '#F5EFE6'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- ==================== TOP NAVIGATION BAR ==================== -->
+  <header class="bg-white border-b border-borderSubtle sticky top-0 z-30">
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+
+      <!-- Multi-Workspace Switcher & Brand Identity -->
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div id="brand-code-badge" class="w-9 h-9 rounded-lg bg-ink text-white flex items-center justify-center font-extrabold text-sm tracking-wider border border-bronze/40">
+          NS
+        </div>
+        <div class="relative">
+          <div class="flex items-center gap-1.5">
+            <select id="workspace-selector" onchange="App.switchWorkspace(this.value)" class="font-extrabold text-sm sm:text-base text-ink bg-transparent border-none focus:outline-none cursor-pointer pr-0 pl-2">
+              <option value="nassar-stone">NASSAR STONE</option>
+            </select>
+            <button onclick="App.openAddCompanyModal()" class="w-6 h-6 rounded-md bg-stoneBg hover:bg-bronzeSoft text-ink hover:text-bronze border border-borderSubtle flex items-center justify-center text-xs transition" title="إضافة شركة / بيئة عمل جديدة">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
+          <p id="brand-subtitle" class="text-[11px] text-muted hidden sm:block">Marketing & Content Intelligence Studio</p>
+        </div>
+      </div>
+
+      <!-- Flat Navigation Tabs -->
+      <nav class="flex items-center gap-1 overflow-x-auto py-1 no-scrollbar">
+        <button onclick="App.switchTab('calendar')" id="tab-calendar" class="tab-btn active px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap">
+          <i class="fa-solid fa-calendar-days ml-1.5 text-bronze"></i>الكاليندر والبوستات
+        </button>
+        <button onclick="App.switchTab('memory')" id="tab-memory" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap">
+          <i class="fa-solid fa-lightbulb ml-1.5 text-bronze"></i>الأفكار والذاكرة والعروض
+        </button>
+        <button onclick="App.switchTab('assets')" id="tab-assets" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap">
+          <i class="fa-solid fa-folder-open ml-1.5 text-bronze"></i>الأصول والمرجعيات
+        </button>
+        <button onclick="App.switchTab('ads')" id="tab-ads" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap">
+          <i class="fa-solid fa-chart-line ml-1.5 text-bronze"></i>غرفة الإعلانات اليومية
+        </button>
+        <button onclick="App.switchTab('reports')" id="tab-reports" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap">
+          <i class="fa-solid fa-file-lines ml-1.5 text-bronze"></i>التقارير والمواسم
+        </button>
+      </nav>
+
+      <!-- Sync Status & Settings Gear -->
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="hidden xl:flex items-center gap-2 text-xs text-muted bg-stoneBg px-3 py-1.5 rounded-lg border border-borderSubtle">
+          <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span id="sync-label">جاهز</span>
+        </div>
+        <button onclick="App.openSettingsModal()" class="px-3 py-1.5 rounded-lg bg-stoneBg hover:bg-borderSubtle/60 text-ink border border-borderSubtle text-xs font-bold flex items-center gap-1.5 transition" title="إعدادات API و GitHub">
+          <i class="fa-solid fa-gear text-bronze"></i>
+          <span class="hidden sm:inline">الإعدادات</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN WORKSPACE ==================== -->
+  <main class="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-6">
+
+    <!-- ==================== VIEW 1: CONTENT & 8-POST CALENDAR ==================== -->
+    <section id="view-calendar" class="space-y-5">
+
+      <!-- Monthly Goal Bar -->
+      <div class="glass-card rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 flex-1">
+          <div class="w-8 h-8 rounded-lg bg-bronzeSoft text-bronze flex items-center justify-center shrink-0">
+            <i class="fa-solid fa-bullseye"></i>
+          </div>
+          <div class="flex-1">
+            <label class="block text-[11px] font-bold text-muted">هدف الفترة الحالي (يوجه توليد الكاليندر ويقاس في التحليلات)</label>
+            <input id="goal-objective-input" type="text" placeholder="اكتب هدف الشهر هنا..." class="w-full text-xs sm:text-sm font-bold text-ink bg-transparent border-b border-transparent focus:border-bronze focus:outline-none py-0.5" />
+          </div>
+        </div>
+        <button onclick="ContentStudio.saveGoal()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-stoneBg hover:bg-bronzeSoft text-ink hover:text-bronze border border-borderSubtle transition shrink-0">
+          تثبيت الهدف ✓
+        </button>
+      </div>
+
+      <!-- Saturation Strip & Generation Actions -->
+      <div class="glass-card rounded-xl p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-bold text-ink ml-1"><i class="fa-solid fa-gauge-high text-bronze ml-1"></i>حالة تشبع الأفكار:</span>
+          <div id="saturation-pills" class="flex flex-wrap items-center gap-1.5"></div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+          <input id="single-post-note" type="text" placeholder="ملاحظة لبوست سريع (اختياري)..." class="px-3 py-2 rounded-lg text-xs bg-stoneBg border border-borderSubtle focus:outline-none focus:border-bronze w-48" />
+          <button id="btn-gen-single" onclick="ContentStudio.handleGenerateSinglePost()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-stoneBg hover:bg-borderSubtle/60 text-ink border border-borderSubtle transition">
+            + بوست فردي
+          </button>
+          <button id="btn-gen-calendar" onclick="ContentStudio.handleGenerateCalendar()" class="px-4 py-2 rounded-lg text-xs font-bold bg-ink hover:bg-ink/90 text-white transition">
+            <i class="fa-solid fa-wand-magic-sparkles text-bronze ml-1"></i>توليد كاليندر (8 بوستات)
+          </button>
+          <button onclick="ContentStudio.exportTeamCalendarFile()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-bronzeSoft hover:bg-bronze/20 text-bronze border border-bronze/30 transition">
+            <i class="fa-solid fa-file-export ml-1"></i>تصدير الكاليندر للتيم ↓
+          </button>
+        </div>
+      </div>
+
+      <!-- Split Workspace: Posts Table + Full Visual Brief Inspector -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+        <!-- Table (7 cols) -->
+        <div class="lg:col-span-7 glass-card rounded-xl overflow-hidden">
+          <div class="px-4 py-3.5 border-b border-borderSubtle flex items-center justify-between">
+            <div>
+              <h2 class="text-sm font-bold text-ink">جدول الكاليندر والبوستات</h2>
+              <p class="text-xs text-muted">اضغط على أي بوست لمراجعة البريف الكامل أو اضغط على الحالة لتغييرها (الاعتماد يزيد التشبع تلقائياً)</p>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-right border-collapse">
+              <thead>
+                <tr class="bg-stoneBg/80 border-b border-borderSubtle text-[11px] font-bold text-muted">
+                  <th class="py-2.5 px-3">#</th>
+                  <th class="py-2.5 px-3">عنوان البوست</th>
+                  <th class="py-2.5 px-3">الفكرة / الزاوية</th>
+                  <th class="py-2.5 px-3">الخامة</th>
+                  <th class="py-2.5 px-3">الحالة</th>
+                </tr>
+              </thead>
+              <tbody id="posts-table-body" class="divide-y divide-borderSubtle text-xs"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Full Team Brief Inspector (5 cols) -->
+        <div id="brief-inspector-content" class="lg:col-span-5 glass-card rounded-xl p-5 space-y-4 sticky top-20 transition-opacity">
+          <div class="border-b border-borderSubtle pb-3">
+            <span id="brief-badge" class="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded bg-bronzeSoft text-bronze mb-1">
+              بوست #01
+            </span>
+            <h3 id="brief-title" class="text-base font-bold text-ink">اختر بوست من الجدول</h3>
+          </div>
+
+          <!-- Editable Post Copy -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-[11px] font-bold text-muted">النص النهائي للنشر (قابل للتعديل)</label>
+              <button onclick="ContentStudio.saveEditedCopy()" class="text-[11px] font-bold text-bronze hover:underline">حفظ التعديل</button>
+            </div>
+            <textarea id="brief-copy" rows="4" class="w-full p-3 rounded-lg bg-stoneBg border border-borderSubtle text-xs leading-relaxed text-ink focus:outline-none focus:border-bronze"></textarea>
+          </div>
+
+          <!-- Visual & Material Specs -->
+          <div class="grid grid-cols-2 gap-2.5 text-xs">
+            <div class="p-3 rounded-lg bg-stoneBg/70 border border-borderSubtle">
+              <span class="block text-[11px] text-muted font-semibold">الخامة / المنتج</span>
+              <span id="brief-material" class="font-bold text-ink mt-0.5 block">-</span>
+            </div>
+            <div class="p-3 rounded-lg bg-stoneBg/70 border border-borderSubtle">
+              <span class="block text-[11px] text-muted font-semibold">درجة الألوان</span>
+              <span id="brief-colors" class="font-bold text-ink mt-0.5 block">-</span>
+            </div>
+            <div class="p-3 rounded-lg bg-stoneBg/70 border border-borderSubtle col-span-2">
+              <span class="block text-[11px] text-muted font-semibold">الجو العام (Mood)</span>
+              <span id="brief-mood" class="font-bold text-ink mt-0.5 block">-</span>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-lg bg-stoneBg/70 border border-borderSubtle text-xs space-y-1">
+            <span class="block text-[11px] text-muted font-semibold">تصور وشكل الصورة للتيم (Visual Direction)</span>
+            <p id="brief-visual" class="text-ink leading-relaxed">-</p>
+          </div>
+
+          <div class="p-3 rounded-lg bg-bronzeSoft/40 border border-bronze/20 text-xs space-y-1">
+            <span class="block text-[11px] text-bronze font-bold">بريف التنفيذ والتمبليت للديزاينر</span>
+            <p id="brief-designer" class="text-ink leading-relaxed">-</p>
+          </div>
+
+          <!-- Reference Image Preview (if generated) -->
+          <div id="brief-ref-image-box" class="hidden rounded-xl overflow-hidden border border-borderSubtle">
+            <img id="brief-ref-image" src="" alt="صورة ريفرنس" class="w-full h-48 object-cover" />
+          </div>
+
+          <!-- On-Demand Reference Image Generation -->
+          <button id="btn-gen-ref-img" onclick="ContentStudio.handleGenerateRefImage()" class="w-full py-2.5 px-3 rounded-lg text-xs font-bold bg-ink text-white hover:bg-ink/90 transition text-center">
+            <i class="fa-solid fa-image text-bronze ml-1.5"></i>توليد صورة ريفرنس مقترحة (Google API)
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: IDEAS, SATURATION, BRAND CORE & RULES ==================== -->
+    <section id="view-memory" class="hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+        <!-- Ideas & Insights Library (7 cols) -->
+        <div class="lg:col-span-7 glass-card rounded-xl p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-borderSubtle pb-3">
+            <div>
+              <h2 class="text-sm font-bold text-ink">مكتبة الأفكار والـ Insights ونظام التشبع</h2>
+              <p class="text-xs text-muted">الأفكار المعتمدة تدخل في حسابات التوليد وتزيد نسبة تشبعها +25% مع كل بوست يُعتمد</p>
+            </div>
+            <button id="btn-gen-ideas" onclick="ContentStudio.handleGenerateIdeas()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-ink text-white hover:bg-ink/90 transition shrink-0">
+              <i class="fa-solid fa-lightbulb text-bronze ml-1"></i>توليد أفكار و Insights
+            </button>
+          </div>
+
+          <div id="ideas-library-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        </div>
+
+        <!-- Brand Core, Active Rules & Offers (5 cols) -->
+        <div class="lg:col-span-5 space-y-5">
+
+          <!-- Compact Brand Core -->
+          <div class="glass-card rounded-xl p-5 space-y-3">
+            <div class="flex items-center justify-between border-b border-borderSubtle pb-2">
+              <h3 class="text-sm font-bold text-ink">دستور الهوية والخامات</h3>
+              <button onclick="ContentStudio.saveBrandCore()" class="text-xs font-bold text-bronze hover:underline">حفظ التعديلات</button>
+            </div>
+            <div class="space-y-2.5 text-xs">
+              <div>
+                <label class="block text-muted font-semibold mb-1">هوية المكان والتموضع</label>
+                <textarea id="core-identity" rows="2" class="w-full p-2.5 rounded-lg bg-stoneBg border border-borderSubtle text-ink"></textarea>
+              </div>
+              <div>
+                <label class="block text-muted font-semibold mb-1">نبرة الكتابة (Tone of Voice)</label>
+                <textarea id="core-tone" rows="2" class="w-full p-2.5 rounded-lg bg-stoneBg border border-borderSubtle text-ink"></textarea>
+              </div>
+              <div>
+                <label class="block text-muted font-semibold mb-1">شرائح الجمهور (B2C / B2B)</label>
+                <textarea id="core-segments" rows="2" class="w-full p-2.5 rounded-lg bg-stoneBg border border-borderSubtle text-ink"></textarea>
+              </div>
+              <div>
+                <label class="block text-muted font-semibold mb-1">قائمة الخامات / المنتجات (مفصولة بفاصلة)</label>
+                <textarea id="core-materials" rows="2" class="w-full p-2.5 rounded-lg bg-stoneBg border border-borderSubtle text-ink"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Correction Rules (Max 15) -->
+          <div class="glass-card rounded-xl p-5 space-y-3">
+            <div class="flex items-center justify-between border-b border-borderSubtle pb-2">
+              <h3 class="text-sm font-bold text-ink">ذاكرة التعديلات ومنع التكرار</h3>
+              <span id="rules-count-badge" class="text-[11px] font-bold px-2 py-0.5 rounded bg-stoneBg border border-borderSubtle text-muted">0 / 15</span>
+            </div>
+            <div class="flex gap-2">
+              <input id="new-rule-input" type="text" placeholder="أضف قاعدة جديدة لتجنب تكرار خطأ..." class="flex-1 px-3 py-2 rounded-lg text-xs bg-stoneBg border border-borderSubtle" />
+              <button onclick="ContentStudio.addRule()" class="px-3 py-2 rounded-lg text-xs font-bold bg-ink text-white">إضافة</button>
+            </div>
+            <ul id="rules-list" class="space-y-2 max-h-48 overflow-y-auto"></ul>
+          </div>
+
+          <!-- Approved Offers Library -->
+          <div class="glass-card rounded-xl p-5 space-y-3">
+            <h3 class="text-sm font-bold text-ink border-b border-borderSubtle pb-2">مكتبة العروض المعتمدة</h3>
+            <div class="space-y-2 text-xs">
+              <div class="flex gap-2">
+                <input id="new-offer-title" type="text" placeholder="اسم العرض / الباقة" class="flex-1 px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+                <select id="new-offer-segment" class="px-2.5 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold">
+                  <option value="B2C">B2C</option>
+                  <option value="B2B">B2B</option>
+                </select>
+              </div>
+              <div class="flex gap-2">
+                <input id="new-offer-details" type="text" placeholder="تفاصيل العرض بدون حرق أسعار..." class="flex-1 px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+                <button onclick="ContentStudio.addOffer()" class="px-3 py-2 rounded-lg font-bold bg-bronze text-white">حفظ</button>
+              </div>
+            </div>
+            <div id="offers-list" class="space-y-2"></div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3: ASSETS & DELIVERED PROJECTS REFERENCE ==================== -->
+    <section id="view-assets" class="hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+        <!-- Delivered Projects Reference Log (7 cols) -->
+        <div class="lg:col-span-7 glass-card rounded-xl p-5 space-y-4">
+          <div class="border-b border-borderSubtle pb-3">
+            <h2 class="text-sm font-bold text-ink">سجل الأعمال المتسلمة (كمرجع حقيقي للكونتنت)</h2>
+            <p class="text-xs text-muted">سجّل المشاريع التي تم تسليمها بالعميل والمكان والخامة ليستند إليها السيستم، بينما يتم تنفيذ التصميمات عبر الديزاينر</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+            <input id="ast-client" type="text" placeholder="اسم العميل / المشروع" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            <input id="ast-location" type="text" placeholder="المكان (التجمع/زايد...)" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            <input id="ast-material" type="text" placeholder="الخامة المستخدمة" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            <button onclick="App.addDeliveredAsset()" class="px-3 py-2 rounded-lg font-bold bg-ink text-white hover:bg-ink/90">
+              + تسجيل عمل متسلم
+            </button>
+          </div>
+
+          <div id="delivered-assets-list" class="space-y-2"></div>
+        </div>
+
+        <!-- Materials Catalog Overview (5 cols) -->
+        <div class="lg:col-span-5 glass-card rounded-xl p-5 space-y-3">
+          <h3 class="text-sm font-bold text-ink border-b border-borderSubtle pb-2">كتالوج الخامات / المنتجات المسجلة</h3>
+          <p class="text-xs text-muted">يتم سحب هذه الخامات تلقائياً عند توليد البوستات وبريفات الديزاينر.</p>
+          <div id="assets-materials-tags" class="flex flex-wrap gap-2 pt-1"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 4: DAILY ADS PULSE & OFFLINE ATTRIBUTION ==================== -->
+    <section id="view-ads" class="hidden space-y-5">
+
+      <!-- Top Control Bar -->
+      <div class="glass-card rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-bold text-ink">غرفة المتابعة اليومية للإعلانات (Daily Ads Pulse)</h2>
+          <p class="text-xs text-muted">تشخيص وقرارات يومية مبنية حصرياً على أرقامك الفعلية وقواعد وتحديثات Meta & Google الرسمية</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <label class="px-3.5 py-2 rounded-lg text-xs font-bold bg-stoneBg hover:bg-borderSubtle/60 text-ink border border-borderSubtle cursor-pointer transition">
+            <i class="fa-solid fa-file-csv text-bronze ml-1.5"></i>رفع ملف CSV اليومي
+            <input type="file" accept=".csv" onchange="AdsIntel.handleCSVUpload(event)" class="hidden" />
+          </label>
+          <button id="btn-diagnose-ads" onclick="AdsIntel.runDailyDiagnosis()" class="px-4 py-2 rounded-lg text-xs font-bold bg-ink hover:bg-ink/90 text-white transition">
+            <i class="fa-solid fa-stethoscope text-bronze ml-1.5"></i>تحليل وتشخيص اليوم
+          </button>
+        </div>
+      </div>
+
+      <!-- Manual Quick Row Entry + Today Table -->
+      <div class="glass-card rounded-xl p-5 space-y-4">
+        <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs">
+          <input id="man-camp-name" type="text" placeholder="اسم الحملة" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle sm:col-span-2" />
+          <input id="man-camp-spend" type="number" placeholder="المصروف (ج.م)" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+          <input id="man-camp-ctr" type="number" step="0.01" placeholder="CTR %" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+          <input id="man-camp-freq" type="number" step="0.1" placeholder="Frequency" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+          <div class="flex gap-1.5">
+            <input id="man-camp-results" type="number" placeholder="النتايج" class="w-full px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            <button onclick="AdsIntel.addManualCampaignRow()" class="px-3 py-2 rounded-lg font-bold bg-bronze text-white shrink-0">+</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-right border-collapse">
+            <thead>
+              <tr class="bg-stoneBg border-b border-borderSubtle text-[11px] font-bold text-muted">
+                <th class="py-2 px-3">الحملة</th>
+                <th class="py-2 px-3">المصروف</th>
+                <th class="py-2 px-3">CTR</th>
+                <th class="py-2 px-3">Frequency</th>
+                <th class="py-2 px-3">النتايج (التكلفة)</th>
+                <th class="py-2 px-3">مقارنة بأمس</th>
+              </tr>
+            </thead>
+            <tbody id="ads-today-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Diagnosis Output Container -->
+        <div id="ads-diagnosis-box"></div>
+      </div>
+
+      <!-- Bottom Grid: Offline Sales Attribution + Live Search Platform Rules -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+        <!-- Offline Sales Blended Attribution (6 cols) -->
+        <div class="lg:col-span-6 glass-card rounded-xl p-5 space-y-4">
+          <div class="border-b border-borderSubtle pb-2">
+            <h3 class="text-sm font-bold text-ink">ربط العملاء المنفذين أوفلاين (Blended CAC)</h3>
+            <p class="text-xs text-muted">سجّل عدد العملاء الذين تعاقدوا أوفلاين لحساب تكلفة العميل الحقيقية دون تعطيل تيم المبيعات</p>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle">
+              <span class="text-muted block text-[11px]">تكلفة العميل الحقيقية</span>
+              <strong id="metric-real-cac" class="text-sm text-ink">-</strong>
+            </div>
+            <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle">
+              <span class="text-muted block text-[11px]">العملاء المنفذين</span>
+              <strong id="metric-offline-clients" class="text-sm text-emerald-700">0</strong>
+            </div>
+            <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle">
+              <span class="text-muted block text-[11px]">إجمالي الصرف المسجل</span>
+              <strong id="metric-total-spend" class="text-sm text-ink">0</strong>
+            </div>
+            <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle">
+              <span class="text-muted block text-[11px]">العائد الكلي (ROAS)</span>
+              <strong id="metric-blended-roas" class="text-sm text-bronze">-</strong>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <input id="offline-clients-count" type="number" placeholder="عدد العملاء" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            <input id="offline-revenue" type="number" placeholder="قيمة المبيعات (اختياري)" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            <input id="offline-material" type="text" placeholder="الخامة المباعة" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            <input id="offline-date" type="date" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+          </div>
+          <button onclick="AdsIntel.addOfflineSaleRecord()" class="w-full py-2 rounded-lg text-xs font-bold bg-ink text-white hover:bg-ink/90">
+            تسجيل تعاقدات أوفلاين وتحديث التكلفة الحقيقية
+          </button>
+
+          <div id="offline-sales-history" class="space-y-1.5"></div>
+        </div>
+
+        <!-- Official Meta & Google Rules + Search Update Button (6 cols) -->
+        <div class="lg:col-span-6 glass-card rounded-xl p-5 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-borderSubtle pb-2">
+            <div>
+              <h3 class="text-sm font-bold text-ink">قواعد وتحديثات Meta & Google المعتمدة</h3>
+              <span id="rules-updated-date" class="text-[11px] text-muted">آخر تحديث: النسخة الأساسية</span>
+            </div>
+            <button id="btn-search-rules" onclick="AdsIntel.handleUpdatePlatformRules()" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-bronzeSoft text-bronze border border-bronze/30 hover:bg-bronze/20 transition shrink-0">
+              <i class="fa-solid fa-magnifying-glass ml-1"></i>تحديث القواعد (Search)
+            </button>
+          </div>
+          <ul id="platform-rules-list" class="space-y-2 max-h-72 overflow-y-auto"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 5: EXECUTIVE REPORTS & SEASONS ==================== -->
+    <section id="view-reports" class="hidden space-y-5">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+        <!-- Executive Report -->
+        <div class="glass-card rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between border-b border-borderSubtle pb-2">
+            <h3 class="text-sm font-bold text-ink">التقرير الأسبوعي / الشهري المختصر</h3>
+            <button onclick="AdsIntel.copyExecutiveReport()" class="text-xs font-bold text-bronze hover:underline">
+              <i class="fa-regular fa-copy ml-1"></i>نسخ التقرير
+            </button>
+          </div>
+          <div id="executive-report-body" class="text-xs text-ink space-y-2 leading-relaxed"></div>
+        </div>
+
+        <!-- Season Comparison -->
+        <div class="glass-card rounded-xl p-5 space-y-3">
+          <h3 class="text-sm font-bold text-ink border-b border-borderSubtle pb-2">مقارنة المواسم والفترات</h3>
+          <div class="flex gap-2 text-xs">
+            <input id="new-season-name" type="text" placeholder="اسم الموسم (مثال: صيف 2026)" class="w-1/3 px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            <input id="new-season-notes" type="text" placeholder="ملخص الطلب والخامات الأكثر مبيعاً..." class="flex-1 px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            <button onclick="AdsIntel.addSeason()" class="px-3 py-2 rounded-lg font-bold bg-ink text-white">إضافة</button>
+          </div>
+          <div id="seasons-list" class="space-y-2"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== SETTINGS MODAL (GEMINI API & GITHUB REPO) ==================== -->
+  <div id="settings-modal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+    <div class="bg-white border border-borderSubtle rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl">
+      <div class="flex items-center justify-between border-b border-borderSubtle pb-3">
+        <h3 class="text-base font-bold text-ink"><i class="fa-solid fa-gear text-bronze ml-1.5"></i>إعدادات الربط السحابي و Google API</h3>
+        <button onclick="App.closeSettingsModal()" class="text-muted hover:text-ink font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-ink mb-1">Gemini API Key (مطلوب للتوليد والبحث والصور)</label>
+          <input id="cfg-gemini-key" type="password" placeholder="AIzaSy..." class="w-full px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-mono" />
+        </div>
+
+        <div class="pt-2 border-t border-borderSubtle">
+          <span class="block font-bold text-bronze mb-2">التخزين السحابي المجاني (GitHub Private Repo) — يحفظ بياناتك حتى لو مسحت الكاش</span>
+          <div class="space-y-2">
+            <input id="cfg-gh-token" type="password" placeholder="GitHub Personal Access Token (ghp_...)" class="w-full px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-mono" />
+            <div class="grid grid-cols-3 gap-2">
+              <input id="cfg-gh-owner" type="text" placeholder="اسم المستخدم (Owner)" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+              <input id="cfg-gh-repo" type="text" placeholder="اسم الريبو (Repo)" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+              <input id="cfg-gh-branch" type="text" value="main" placeholder="Branch (main)" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-borderSubtle">
+        <button onclick="App.handleForcePull()" class="px-3 py-2 rounded-lg text-xs font-bold bg-stoneBg hover:bg-borderSubtle/60 text-ink border border-borderSubtle">
+          <i class="fa-solid fa-cloud-arrow-down ml-1"></i>استرجاع من GitHub الآن
+        </button>
+        <button onclick="App.saveSettings()" class="px-5 py-2 rounded-lg text-xs font-bold bg-ink text-white hover:bg-ink/90">
+          حفظ الإعدادات
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ADD NEW COMPANY WORKSPACE MODAL ==================== -->
+  <div id="add-company-modal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+    <div class="bg-white border border-borderSubtle rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+      <div class="flex items-center justify-between border-b border-borderSubtle pb-3">
+        <h3 class="text-base font-bold text-ink"><i class="fa-solid fa-building text-bronze ml-1.5"></i>إضافة شركة / بيئة عمل جديدة</h3>
+        <button onclick="App.closeAddCompanyModal()" class="text-muted hover:text-ink font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-3 gap-2">
+          <div class="col-span-2">
+            <label class="block font-bold text-ink mb-1">اسم الشركة</label>
+            <input id="new-comp-name" type="text" placeholder="مثال: شركة كذا للتطوير" class="w-full px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
+          </div>
+          <div>
+            <label class="block font-bold text-ink mb-1">اختصار (حرفين)</label>
+            <input id="new-comp-code" type="text" maxlength="3" placeholder="CO" class="w-full px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle uppercase" />
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-ink mb-1">وصف مختصر للهوية والنشاط</label>
+          <textarea id="new-comp-identity" rows="3" placeholder="اكتب طبيعة شغل الشركة، الفئة المستهدفة، وأسلوبها..." class="w-full p-2.5 rounded-lg bg-stoneBg border border-borderSubtle"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-borderSubtle">
+        <button onclick="App.closeAddCompanyModal()" class="px-4 py-2 rounded-lg text-xs font-bold bg-stoneBg text-ink">إلغاء</button>
+        <button onclick="App.createNewCompany()" class="px-4 py-2 rounded-lg text-xs font-bold bg-ink text-white">إنشاء بيئة العمل</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 left-5 bg-ink text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
+
+  <!-- Modular Scripts -->
+  <script src="js/storage.js"></script>
+  <script src="js/ai-engine.js"></script>
+  <script src="js/content-studio.js"></script>
+  <script src="js/ads-intel.js"></script>
+
+  <!-- Main Application Controller -->
+  <script>
+    const App = (() => {
+      let companies = [];
+      let currentCompanyId = 'nassar-stone';
+      let currentWorkspace = null;
+      let platformRules = null;
+      let activeTab = 'calendar';
+
+      async function init() {
+        companies = await StorageEngine.loadCompaniesList();
+        const savedId = localStorage.getItem('ns_active_company');
+        if (savedId && companies.some(c => c.id === savedId)) {
+          currentCompanyId = savedId;
+        } else {
+          currentCompanyId = companies[0].id;
+        }
+
+        renderCompanySelector();
+        currentWorkspace = await StorageEngine.loadWorkspace(currentCompanyId);
+        platformRules = await StorageEngine.loadPlatformRules();
+        refreshUI();
+      }
+
+      function renderCompanySelector() {
+        const sel = document.getElementById('workspace-selector');
+        sel.innerHTML = companies.map(c =>
+          `<option value="${c.id}" ${c.id === currentCompanyId ? 'selected' : ''}>${c.name}</option>`
+        ).join('');
+
+        const comp = getCurrentCompany();
+        if (comp) {
+          document.getElementById('brand-code-badge').textContent = comp.code || comp.name.slice(0, 2).toUpperCase();
+          document.getElementById('brand-subtitle').textContent = comp.subtitle || 'Marketing & Content Studio';
+        }
+      }
+
+      async function switchWorkspace(companyId) {
+        currentCompanyId = companyId;
+        localStorage.setItem('ns_active_company', companyId);
+        renderCompanySelector();
+        currentWorkspace = await StorageEngine.loadWorkspace(companyId);
+        refreshUI();
+        showToast(`تم الانتقال إلى بيئة عمل: ${getCurrentCompany().name}`);
+      }
+
+      function getCurrentCompany() {
+        return companies.find(c => c.id === currentCompanyId) || companies[0];
+      }
+
+      function getCurrentWorkspace() {
+        return currentWorkspace;
+      }
+
+      function getPlatformRules() {
+        return platformRules;
+      }
+
+      async function persistWorkspace() {
+        await StorageEngine.saveWorkspace(currentCompanyId, currentWorkspace);
+      }
+
+      async function updatePlatformRules(newRules) {
+        platformRules = newRules;
+        await StorageEngine.savePlatformRules(newRules);
+      }
+
+      function switchTab(tabName) {
+        activeTab = tabName;
+        ['calendar', 'memory', 'assets', 'ads', 'reports'].forEach(name => {
+          document.getElementById(`view-${name}`).classList.toggle('hidden', name !== tabName);
+          const btn = document.getElementById(`tab-${name}`);
+          if (name === tabName) btn.classList.add('active');
+          else btn.classList.remove('active');
+        });
+        refreshUI();
+      }
+
+      function refreshUI() {
+        if (!currentWorkspace) return;
+        ContentStudio.renderCalendarView(currentWorkspace);
+        ContentStudio.renderMemoryAndIdeasView(currentWorkspace);
+        renderAssetsView();
+        AdsIntel.renderAdsView(currentWorkspace, platformRules);
+        AdsIntel.renderReportsView(currentWorkspace);
+      }
+
+      function renderAssetsView() {
+        const list = document.getElementById('delivered-assets-list');
+        const delivered = currentWorkspace.assets?.delivered || [];
+        if (list) {
+          list.innerHTML = delivered.length === 0
+            ? `<p class="text-xs text-muted">لا توجد أعمال متسلمة مسجلة بعد.</p>`
+            : delivered.map((item, idx) => `
+              <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle flex items-center justify-between text-xs">
+                <div>
+                  <strong class="text-ink">${item.client}</strong>
+                  <span class="text-muted"> • ${item.location} • خامة: <strong class="text-bronze">${item.material}</strong></span>
+                </div>
+                <button onclick="App.removeDeliveredAsset(${idx})" class="text-rose-600 font-bold px-1.5">✕</button>
+              </div>
+            `).join('');
+        }
+
+        const tags = document.getElementById('assets-materials-tags');
+        const mats = currentWorkspace.brandCore?.materials || [];
+        if (tags) {
+          tags.innerHTML = mats.map(m =>
+            `<span class="px-2.5 py-1 rounded-md bg-stoneBg border border-borderSubtle text-xs font-semibold text-ink">${m}</span>`
+          ).join('');
+        }
+      }
+
+      async function addDeliveredAsset() {
+        const client = document.getElementById('ast-client').value.trim();
+        const location = document.getElementById('ast-location').value.trim();
+        const material = document.getElementById('ast-material').value.trim();
+        if (!client || !material) {
+          showToast('أدخل اسم العميل والخامة على الأقل.', true);
+          return;
+        }
+        if (!currentWorkspace.assets) currentWorkspace.assets = { delivered: [], designerDeliveries: [] };
+        currentWorkspace.assets.delivered.unshift({ id: 'ast-' + Date.now(), client, location, material });
+        document.getElementById('ast-client').value = '';
+        document.getElementById('ast-location').value = '';
+        document.getElementById('ast-material').value = '';
+        await persistWorkspace();
+        refreshUI();
+        showToast('تم تسجيل العمل المتسلم كمرجع');
+      }
+
+      async function removeDeliveredAsset(idx) {
+        currentWorkspace.assets.delivered.splice(idx, 1);
+        await persistWorkspace();
+        refreshUI();
+      }
+
+      // --- Modals ---
+      function openSettingsModal() {
+        const cfg = StorageEngine.getConfig();
+        document.getElementById('cfg-gemini-key').value = cfg.geminiKey || '';
+        document.getElementById('cfg-gh-token').value = cfg.ghToken || '';
+        document.getElementById('cfg-gh-owner').value = cfg.ghOwner || '';
+        document.getElementById('cfg-gh-repo').value = cfg.ghRepo || '';
+        document.getElementById('cfg-gh-branch').value = cfg.ghBranch || 'main';
+        const m = document.getElementById('settings-modal');
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+
+      function closeSettingsModal() {
+        const m = document.getElementById('settings-modal');
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+
+      async function saveSettings() {
+        const cfg = {
+          geminiKey: document.getElementById('cfg-gemini-key').value.trim(),
+          ghToken: document.getElementById('cfg-gh-token').value.trim(),
+          ghOwner: document.getElementById('cfg-gh-owner').value.trim(),
+          ghRepo: document.getElementById('cfg-gh-repo').value.trim(),
+          ghBranch: document.getElementById('cfg-gh-branch').value.trim() || 'main'
+        };
+        StorageEngine.saveConfig(cfg);
+        closeSettingsModal();
+        showToast('تم حفظ الإعدادات. جاري التحقق من المزامنة...');
+        await init();
+      }
+
+      async function handleForcePull() {
+        try {
+          const pulled = await StorageEngine.forcePullFromGitHub(currentCompanyId);
+          companies = pulled.companies;
+          currentWorkspace = pulled.ws;
+          platformRules = pulled.rules;
+          renderCompanySelector();
+          refreshUI();
+          closeSettingsModal();
+          showToast('تم استرجاع كافة البيانات من GitHub بنجاح');
+        } catch (e) {
+          showToast(e.message, true);
+        }
+      }
+
+      function openAddCompanyModal() {
+        const m = document.getElementById('add-company-modal');
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+
+      function closeAddCompanyModal() {
+        const m = document.getElementById('add-company-modal');
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+
+      async function createNewCompany() {
+        const name = document.getElementById('new-comp-name').value.trim();
+        const code = (document.getElementById('new-comp-code').value.trim() || name.slice(0, 2)).toUpperCase();
+        const identity = document.getElementById('new-comp-identity').value.trim();
+
+        if (!name) {
+          showToast('اكتب اسم الشركة أولاً.', true);
+          return;
+        }
+
+        const id = name.toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]+/g, '-') + '-' + Date.now().toString().slice(-4);
+        const newComp = { id, name, code, subtitle: 'Marketing & Content Studio' };
+        companies.push(newComp);
+        await StorageEngine.saveCompaniesList(companies);
+
+        const newWs = StorageEngine.createEmptyWorkspace(name);
+        if (identity) newWs.brandCore.identity = identity;
+        await StorageEngine.saveWorkspace(id, newWs);
+
+        document.getElementById('new-comp-name').value = '';
+        document.getElementById('new-comp-code').value = '';
+        document.getElementById('new-comp-identity').value = '';
+
+        closeAddCompanyModal();
+        await switchWorkspace(id);
+      }
+
+      function showToast(msg, isError = false) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = `fixed bottom-5 left-5 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg transition-opacity duration-200 z-50 ${isError ? 'bg-rose-700' : 'bg-ink'}`;
+        t.classList.remove('opacity-0');
+        setTimeout(() => t.classList.add('opacity-0'), 3200);
+      }
+
+      return {
+        init,
+        switchWorkspace,
+        getCurrentCompany,
+        getCurrentWorkspace,
+        getPlatformRules,
+        persistWorkspace,
+        updatePlatformRules,
+        switchTab,
+        refreshUI,
+        addDeliveredAsset,
+        removeDeliveredAsset,
+        openSettingsModal,
+        closeSettingsModal,
+        saveSettings,
+        handleForcePull,
+        openAddCompanyModal,
+        closeAddCompanyModal,
+        createNewCompany,
+        showToast
+      };
+    })();
+
+    window.addEventListener('DOMContentLoaded', () => App.init());
+  </script>
+</body>
+</html>
