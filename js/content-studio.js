@@ -263,59 +263,13 @@ const ContentStudio = (() => {
     }
 
     const dateStr = new Date().toISOString().slice(0, 10);
-    let htmlContent = `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<title>كاليندر وبريف التيم — ${escapeHtml(company.name)} (${dateStr})</title>
-<style>
-  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #F8F7F4; color: #141413; padding: 32px; line-height: 1.6; }
-  .header { background: #141413; color: #F8F7F4; padding: 24px 32px; border-radius: 12px; margin-bottom: 24px; }
-  .header h1 { margin: 0 0 6px 0; font-size: 24px; }
-  .header p { margin: 0; color: #B89662; font-size: 14px; }
-  .post-card { background: #FFFFFF; border: 1px solid #E6E4DD; border-radius: 12px; padding: 24px; margin-bottom: 20px; page-break-inside: avoid; }
-  .badge { display: inline-block; background: #F5EFE6; color: #9A7B4F; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; }
-  .status { display: inline-block; background: #141413; color: #FFF; padding: 4px 10px; border-radius: 6px; font-size: 12px; margin-right: 8px; }
-  .copy-box { background: #F8F7F4; border-right: 4px solid #9A7B4F; padding: 14px; border-radius: 8px; margin: 14px 0; white-space: pre-wrap; font-size: 15px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
-  .meta { background: #F8F7F4; padding: 10px 14px; border-radius: 8px; font-size: 13px; }
-  .meta strong { display: block; color: #6E6D68; font-size: 11px; margin-bottom: 3px; }
-</style>
-</head>
-<body>
-  <div class="header">
-    <h1>كاليندر المحتوى والبريف التنفيذي للتيم — ${escapeHtml(company.name)}</h1>
-    <p>تاريخ التصدير: ${dateStr} | هدف الفترة: ${escapeHtml(ws.goal?.objective || '')}</p>
-  </div>
-`;
+    let htmlContent = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>كاليندر وبريف التيم — ${escapeHtml(company.name)}</title><style>body{font-family:'Segoe UI',Tahoma,sans-serif;background:#F8F7F4;color:#141413;padding:32px;line-height:1.6}.header{background:#141413;color:#F8F7F4;padding:24px 32px;border-radius:12px;margin-bottom:24px}.post-card{background:#FFF;border:1px solid #E6E4DD;border-radius:12px;padding:24px;margin-bottom:20px}.badge{background:#F5EFE6;color:#9A7B4F;padding:4px 10px;border-radius:6px;font-weight:bold;font-size:12px}.copy-box{background:#F8F7F4;border-right:4px solid #9A7B4F;padding:14px;border-radius:8px;margin:14px 0;white-space:pre-wrap}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.meta{background:#F8F7F4;padding:10px 14px;border-radius:8px;font-size:13px}</style></head><body><div class="header"><h1>كاليندر المحتوى والبريف التنفيذي — ${escapeHtml(company.name)}</h1><p>التاريخ: ${dateStr} | الهدف: ${escapeHtml(ws.goal?.objective || '')}</p></div>`;
 
     posts.forEach((p, idx) => {
-      htmlContent += `
-  <div class="post-card">
-    <div>
-      <span class="badge">بوست #${String(idx + 1).padStart(2, '0')} • ${escapeHtml(p.segment || 'B2C')}</span>
-      <span class="status">الحالة: ${escapeHtml(p.status || 'مسودة')}</span>
-    </div>
-    <h2 style="margin: 10px 0 4px 0; font-size: 18px;">${escapeHtml(p.title)}</h2>
-    <div style="font-size: 12px; color: #6E6D68;">الفكرة / الزاوية: ${escapeHtml(p.ideaTitle || '-')}</div>
-
-    <div class="copy-box">${escapeHtml(p.copy || '')}</div>
-
-    <div class="grid">
-      <div class="meta"><strong>الخامة / المنتج</strong>${escapeHtml(p.material || '-')}</div>
-      <div class="meta"><strong>درجة الألوان المطلوبة</strong>${escapeHtml(p.colorPalette || '-')}</div>
-      <div class="meta"><strong>الجو العام (Mood)</strong>${escapeHtml(p.mood || '-')}</div>
-      <div class="meta"><strong>بريف التعديل والتمبليت للديزاينر</strong>${escapeHtml(p.designerBrief || '-')}</div>
-    </div>
-    <div class="meta" style="margin-top: 12px;">
-      <strong>تصور وشكل الصورة للتنفيذ / التصوير (Visual Direction)</strong>
-      ${escapeHtml(p.visualDirection || '-')}
-    </div>
-  </div>`;
+      htmlContent += `<div class="post-card"><span class="badge">بوست #${String(idx + 1).padStart(2, '0')} • ${escapeHtml(p.segment || 'B2C')} • ${escapeHtml(p.status || 'مسودة')}</span><h2>${escapeHtml(p.title)}</h2><div class="copy-box">${escapeHtml(p.copy || '')}</div><div class="grid"><div class="meta"><strong>الخامة:</strong> ${escapeHtml(p.material || '-')}</div><div class="meta"><strong>الألوان:</strong> ${escapeHtml(p.colorPalette || '-')}</div><div class="meta"><strong>الجو العام:</strong> ${escapeHtml(p.mood || '-')}</div><div class="meta"><strong>بريف الديزاينر:</strong> ${escapeHtml(p.designerBrief || '-')}</div></div><div class="meta" style="margin-top:12px"><strong>تصور الصورة:</strong> ${escapeHtml(p.visualDirection || '-')}</div></div>`;
     });
 
     htmlContent += `</body></html>`;
-
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -339,7 +293,7 @@ const ContentStudio = (() => {
     rulesList.innerHTML = rules.map((r, idx) => `
       <li class="p-2.5 rounded-lg bg-stoneBg border border-borderSubtle flex items-start justify-between gap-2 text-xs">
         <span class="text-ink leading-relaxed">${escapeHtml(r)}</span>
-        <button onclick="ContentStudio.removeRule(${idx})" class="text-rose-600 hover:text-rose-800 font-bold px-1.5 shrink-0" title="حذف القاعدة">✕</button>
+        <button onclick="ContentStudio.removeRule(${idx})" class="text-rose-600 hover:text-rose-800 font-bold px-1.5 shrink-0">✕</button>
       </li>
     `).join('');
 
@@ -496,4 +450,40 @@ const ContentStudio = (() => {
     ws.brandCore.identity = document.getElementById('core-identity').value.trim();
     ws.brandCore.tone = document.getElementById('core-tone').value.trim();
     ws.brandCore.segments = document.getElementById('core-segments').value.trim();
-    ws.brandCore.materials = docum
+    ws.brandCore.materials = document.getElementById('core-materials').value.split(',').map(s => s.trim()).filter(Boolean);
+
+    await App.persistWorkspace();
+    App.showToast('تم حفظ دستور البراند والخامات');
+  }
+
+  async function saveGoal() {
+    const ws = App.getCurrentWorkspace();
+    ws.goal.objective = document.getElementById('goal-objective-input').value.trim();
+    await App.persistWorkspace();
+    App.showToast('تم تحديث هدف الفترة لتوجيه التوليد والتحليلات');
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  return {
+    renderCalendarView,
+    renderMemoryAndIdeasView,
+    selectPost,
+    cyclePostStatus,
+    saveEditedCopy,
+    handleGenerateCalendar,
+    handleGenerateSinglePost,
+    handleGenerateRefImage,
+    exportTeamCalendarFile,
+    handleGenerateIdeas,
+    approveIdea,
+    deleteIdea,
+    addRule,
+    removeRule,
+    addOffer,
+    removeOffer,
+    saveBrandCore,
+    saveGoal
