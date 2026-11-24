@@ -1,12 +1,4 @@
-/**
- * ============================================================================
- * js/ai-engine.js
- * Token-Efficient Gemini API Engine (Updated to Gemini 3 Flash with Auto-Fallback)
- * ============================================================================
- */
-
 const AIEngine = (() => {
-  // Primary and fallback models for text/JSON generation
   const TEXT_MODELS = ['gemini-3-flash-preview', 'gemini-3.0-flash', 'gemini-2.0-flash'];
   const IMAGE_MODEL = 'imagen-3.0-generate-002';
 
@@ -18,7 +10,6 @@ const AIEngine = (() => {
     return cfg.geminiKey.trim();
   }
 
-  // Build compact context to minimize token burn while preserving brand accuracy
   function buildCompactContext(ws) {
     const core = ws.brandCore;
     const activeRules = (core.rules || []).slice(0, 15).map((r, i) => `${i + 1}. ${r}`).join('\n');
@@ -50,8 +41,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
 `.trim();
   }
 
-  // Calls Gemini with automatic model fallback if a model version is deprecated
-  async function fetchGeminiWithFallback(payload, useSearch = false) {
+  async function fetchGeminiWithFallback(payload) {
     const apiKey = getApiKey();
     let lastError = '';
 
@@ -64,13 +54,10 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
           body: JSON.stringify(payload)
         });
 
-        if (res.ok) {
-          return await res.json();
-        }
+        if (res.ok) return await res.json();
 
         const errText = await res.text();
         lastError = `(${res.status}): ${errText}`;
-        // If 404 (model not found), try next model in array
         if (res.status === 404) continue;
         throw new Error(`Gemini API Error ${lastError}`);
       } catch (e) {
@@ -91,9 +78,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     };
 
     if (systemInstruction) {
-      payload.systemInstruction = {
-        parts: [{ text: systemInstruction }]
-      };
+      payload.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
 
     const data = await fetchGeminiWithFallback(payload);
@@ -103,12 +88,12 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     try {
       return JSON.parse(rawText);
     } catch (e) {
-      const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const cleaned = rawText.replace(/
+```json/gi, '').replace(/```/g, '').trim();
       return JSON.parse(cleaned);
     }
   }
 
-  // 1. Generate 8-Post Calendar with Full Team Briefs
   async function generateCalendar8(ws) {
     const context = buildCompactContext(ws);
     const sys = `أنت مدير تسويق واستراتيجي محتوى محترف. تلتزم حرفياً بهوية البراند وقواعده النشطة، وتحقق هدف الفترة، وتتجنب الأفكار المشبعة تماماً. تخرج النتيجة كـ JSON فقط.`;
@@ -147,7 +132,6 @@ ${context}
     return result.posts;
   }
 
-  // 2. Generate Single Post
   async function generateSinglePost(ws, customNote = '') {
     const context = buildCompactContext(ws);
     const sys = `أنت مدير تسويق محترف. تلتزم بهوية البراند والقواعد وتخرج بوست واحد متكامل التفاصيل بصيغة JSON فقط.`;
@@ -175,13 +159,10 @@ ${context}
 }
 `;
     const result = await callGeminiJSON(prompt, sys);
-    if (!result || !result.post) {
-      throw new Error('تعذر توليد البوست الفردي.');
-    }
+    if (!result || !result.post) throw new Error('تعذر توليد البوست الفردي.');
     return result.post;
   }
 
-  // 3. Generate New Ideas & Insights
   async function generateIdeas(ws, count = 4) {
     const context = buildCompactContext(ws);
     const existingTitles = (ws.ideas || []).map(i => i.title).join(' | ');
@@ -206,33 +187,13 @@ ${context}
     return result?.ideas || [];
   }
 
-  // 4. Generate Reference Image On-Demand
   async function generateReferenceImage(post) {
     const apiKey = getApiKey();
-    const prompt = `Architectural luxury interior photography, ${post.material || 'natural quartz stone surface'}, ${post.visualDirection}. Color palette: ${post.colorPalette}. Mood: ${post.mood}. Quiet luxury aesthetic, soft natural directional lighting, ultra clean composition, 8k photorealistic, no text, no watermarks.`;
+    const prompt = `Architectural luxury interior photography, ${post.material \vert{}\vert{} 'natural quartz stone surface'},${post.visualDirection}. Color palette: ${post.colorPalette}. Mood: ${post.mood}. Quiet luxury aesthetic, soft natural directional lighting, ultra clean composition, 8k photorealistic, no text, no watermarks.`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:predict?key=${encodeURIComponent(apiKey)}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        instances: [{ prompt }],
-        parameters: { sampleCount: 1, aspectRatio: '4:3' }
-      })
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`تعذر توليد صورة الريفرنس (${res.status}): تأكد من تفعيل Imagen API على مفتاحك. التفاصيل: ${errText}`);
-    }
-
-    const data = await res.json();
-    const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
-    if (!b64) throw new Error('لم يتم إرجاع بيانات الصورة من Google API.');
-    return `data:image/png;base64,${b64}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:predict?key=${encodeURIComponent(apiKey)}`; const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1, aspectRatio: '4:3' } }) });  if (!res.ok) { const errText = await res.text(); throw new Error(`تعذر توليد صورة الريفرنس (${res.status}): ${errText}`); }  const data = await res.json(); const b64 = data?.predictions?.[0]?.bytesBase64Encoded; if (!b64) throw new Error('لم يتم إرجاع بيانات الصورة من Google API.'); return `data:image/png;base64,${b64}`;
   }
 
-  // 5. Google Search Grounding to Update Meta & Google Official Rules
   async function searchAndUpdatePlatformRules() {
     const prompt = `
 ابحث في التحديثات الرسمية الحديثة لمنصات Meta Ads (مثل تحديثات Andromeda, Advantage+, Creative Diversification, Learning Phase) و Google Ads (Performance Max, Search Bidding) وممارسات الميديا بايرز الموثوقة.
@@ -246,16 +207,14 @@ ${context}
       generationConfig: { temperature: 0.3 }
     };
 
-    const data = await fetchGeminiWithFallback(payload, true);
+    const data = await fetchGeminiWithFallback(payload);
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const lines = text
       .split('\n')
       .map(l => l.replace(/^[\d\-\*\.\)]+\s*/, '').trim())
       .filter(l => l.length > 15);
 
-    if (lines.length === 0) {
-      throw new Error('لم يتم العثور على قواعد واضحة من البحث.');
-    }
+    if (lines.length === 0) throw new Error('لم يتم العثور على قواعد واضحة من البحث.');
 
     return {
       lastUpdated: new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }),
@@ -263,9 +222,8 @@ ${context}
     };
   }
 
-  // 6. Analyze Daily Ads Data strictly against Real Metrics + Official Platform Rules
   async function analyzeAdsWithRules(ws, todaySummary, yesterdaySummary, platformRulesObj) {
-    const rulesText = (platformRulesObj.rules || []).map((r, i) => `${i + 1}. ${r}`).join('\n');
+    const rulesText = (platformRulesObj.rules || []).map((r, i) => `${i + 1}.${r}`).join('\n');
     const goalText = ws.goal?.objective || 'غير محدد';
 
     const prompt = `
