@@ -1,10 +1,12 @@
 const ContentStudio = (() => {
-  const STATUS_FLOW = ['مسودة', 'معتمد', 'اتعمل', 'اترفع'];
+  const EXCLUSION_OPTIONS = { 'مرفوض': 'rejected', 'متشبع': 'saturated' };
+  const POST_STATUSES = ['مسودة', 'معتمد', 'اتعمل', 'اترفع', ...Object.keys(EXCLUSION_OPTIONS)];
   let selectedPostIndex = 0;
 
   function getStatusBadgeClass(status) {
     if (status === 'معتمد') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     if (status === 'اتعمل') return 'bg-amber-50 text-amber-700 border-amber-200';
+    if (EXCLUSION_OPTIONS[status]) return 'bg-rose-50 text-rose-800 border-rose-200';
     if (status === 'اترفع') return 'bg-ink text-white border-ink';
     return 'bg-stoneBg text-muted border-borderSubtle';
   }
@@ -55,7 +57,11 @@ const ContentStudio = (() => {
         <td class="py-3 px-3 font-bold text-ink">${escapeHtml(p.title)}</td>
         <td class="py-3 px-3 text-muted">${escapeHtml(p.ideaTitle || '-')}</td>
         <td class="py-3 px-3 font-medium text-ink">${escapeHtml(p.material || '-')}</td>
-        <td class="py-3 px-3"><button onclick="event.stopPropagation(); ContentStudio.cyclePostStatus(${idx})" class="px-2.5 py-1 rounded-md text-[11px] font-bold border ${getStatusBadgeClass(p.status)}">${p.status || 'مسودة'}</button></td>
+        <td class="py-3 px-3">
+          <select aria-label="حالة البوست" onclick="event.stopPropagation()" onchange="ContentStudio.setPostStatus(${idx}, this.value)" class="px-2.5 py-1 rounded-md text-[11px] font-bold border ${getStatusBadgeClass(p.status)}">
+            ${POST_STATUSES.map(status => `<option value="${status}" ${status === (p.status || 'مسودة') ? 'selected' : ''}>${status}</option>`).join('')}
+          </select>
+        </td>
       </tr>
     `).join('');
 
@@ -80,22 +86,55 @@ const ContentStudio = (() => {
 
   function selectPost(idx) { selectedPostIndex = idx; App.refreshUI(); }
 
-  async function cyclePostStatus(idx) {
+  async function setPostStatus(idx, next) {
     const ws = App.getCurrentWorkspace();
     const post = ws.calendar[idx];
-    if (!post) return;
-    const cur = post.status || 'مسودة';
-    const next = STATUS_FLOW[(STATUS_FLOW.indexOf(cur) + 1) % STATUS_FLOW.length];
-    post.status = next;
-    if (next === 'معتمد' && !post.saturationCounted) {
+    if (!post || !POST_STATUSES.includes(next)) return;
+
+    const match = ws.ideas.find(idea => AIEngine.matchesIdea(idea, post));
+    const excludedStatus = EXCLUSION_OPTIONS[next];
+    if (excludedStatus) {
+      if (match) {
+        match.status = excludedStatus;
+      } else {
+        ws.ideas.unshift({
+          id: post.ideaId && post.ideaId !== 'new' ? post.ideaId : 'idea-' + Date.now(),
+          title: post.ideaTitle || post.title,
+          insight: post.copy || post.title,
+          segment: post.segment || 'B2C',
+          saturation: 0,
+          status: excludedStatus
+        });
+      }
+    } else if (next === 'معتمد' && !post.saturationCounted) {
       post.saturationCounted = true;
-      let match = (ws.ideas || []).find(i => i.id === post.ideaId || i.title.trim() === (post.ideaTitle || '').trim());
-      if (match) { match.saturation = Math.min(100, (match.saturation || 0) + 25); match.status = 'approved'; }
-      else if (post.ideaTitle) ws.ideas.unshift({ id: 'idea-' + Date.now(), title: post.ideaTitle, insight: post.title, segment: post.segment || 'B2C', saturation: 25, status: 'approved' });
+      if (match && !AIEngine.exclusionLabel(match)) {
+        match.saturation = Math.min(100, (match.saturation || 0) + 25);
+        match.status = 'approved';
+      } else if (!match && post.ideaTitle) {
+        ws.ideas.unshift({ id: 'idea-' + Date.now(), title: post.ideaTitle, insight: post.title, segment: post.segment || 'B2C', saturation: 25, status: 'approved' });
+      }
     }
-    await App.persistWorkspace();
+    post.status = next;
+    await saveStatusChange(excludedStatus ? 'تم استبعاد الزاوية من التوليد' : 'تم تغيير الحالة إلى ' + next);
+  }
+
+  async function saveStatusChange(message) {
+    try {
+      await App.persistWorkspace();
+      App.showToast(message);
+    } catch (e) {
+      App.showToast(e.message, true);
+    }
     App.refreshUI();
-    App.showToast(`تم تغيير الحالة إلى: ${next}`);
+  }
+
+  async function excludeIdea(i, status) {
+    const idea = App.getCurrentWorkspace().ideas[i];
+    if (!idea || !Object.values(EXCLUSION_OPTIONS).includes(status)) return;
+
+    idea.status = status;
+    await saveStatusChange('تم استبعاد الزاوية من التوليد');
   }
 
   async function saveEditedCopy() {
@@ -192,7 +231,23 @@ const ContentStudio = (() => {
     const ideas = ws.ideas || [];
     document.getElementById('ideas-library-grid').innerHTML = ideas.length === 0 ? `<p class="text-xs text-muted col-span-2">مكتبة الأفكار فارغة.</p>` : ideas.map((idea, i) => {
       const pend = idea.status === 'pending';
-      return `<div class="p-3.5 rounded-xl border ${pend ? 'border-bronze bg-bronzeSoft/30' : 'border-borderSubtle bg-white'} space-y-2 text-xs"><div class="flex justify-between"><span class="px-2 py-0.5 rounded bg-stoneBg font-bold">${escapeHtml(idea.segment || 'B2C')}</span><button onclick="ContentStudio.deleteIdea(${i})" class="text-muted hover:text-rose-600">✕</button></div><h4 class="font-bold text-ink">${escapeHtml(idea.title)}</h4><p class="text-[11px] text-muted">${escapeHtml(idea.insight || '')}</p>${pend ? `<button onclick="ContentStudio.approveIdea(${i})" class="w-full py-1.5 rounded-lg font-bold bg-ink text-white">اعتماد ✓</button>` : `<div class="sat-bar"><div class="sat-fill ${getSaturationColor(idea.saturation)}" style="width:${idea.saturation}%"></div></div>`}</div>`;
+      const excluded = AIEngine.exclusionLabel(idea);
+      return `<div class="p-3.5 rounded-xl border ${pend ? 'border-bronze bg-bronzeSoft/30' : 'border-borderSubtle bg-white'} space-y-2 text-xs">
+        <div class="flex justify-between">
+          <span class="px-2 py-0.5 rounded bg-stoneBg font-bold">${escapeHtml(idea.segment || 'B2C')}</span>
+          ${excluded ? `<span class="px-2 py-0.5 rounded bg-rose-50 text-rose-800 font-bold">${excluded}</span>`
+            : `<button onclick="ContentStudio.deleteIdea(${i})" aria-label="حذف الفكرة" class="text-muted hover:text-rose-600">✕</button>`}
+        </div>
+        <h4 class="font-bold text-ink">${escapeHtml(idea.title)}</h4>
+        <p class="text-[11px] text-muted">${escapeHtml(idea.insight || '')}</p>
+        ${excluded ? '' : `
+          ${pend ? `<button onclick="ContentStudio.approveIdea(${i})" class="w-full py-1.5 rounded-lg font-bold bg-ink text-white">اعتماد ✓</button>`
+            : `<div class="sat-bar"><div class="sat-fill ${getSaturationColor(idea.saturation)}" style="width:${idea.saturation}%"></div></div>`}
+          <div class="flex flex-wrap gap-2">
+            ${Object.entries(EXCLUSION_OPTIONS).map(([label, status]) =>
+              `<button onclick="ContentStudio.excludeIdea(${i}, '${status}')" class="px-2 py-1 rounded border border-borderSubtle text-rose-800 hover:bg-rose-50">${label}</button>`).join('')}
+          </div>`}
+      </div>`;
     }).join('');
   }
 
@@ -209,8 +264,8 @@ const ContentStudio = (() => {
     finally { btn.disabled = false; btn.innerHTML = orig; }
   }
 
-  async function approveIdea(i) { const ws = App.getCurrentWorkspace(); ws.ideas[i].status = 'approved'; ws.ideas[i].saturation = 0; await App.persistWorkspace(); App.refreshUI(); }
-  async function deleteIdea(i) { const ws = App.getCurrentWorkspace(); ws.ideas.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
+  async function approveIdea(i) { const ws = App.getCurrentWorkspace(); if (ws.ideas[i]?.status !== 'pending') return; ws.ideas[i].status = 'approved'; ws.ideas[i].saturation = 0; await App.persistWorkspace(); App.refreshUI(); }
+  async function deleteIdea(i) { const ws = App.getCurrentWorkspace(); if (!ws.ideas[i] || AIEngine.exclusionLabel(ws.ideas[i])) return; ws.ideas.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
   async function addRule() { const inp = document.getElementById('new-rule-input'); if (!inp.value.trim()) return; const ws = App.getCurrentWorkspace(); if (ws.brandCore.rules.length >= 15) { App.showToast('الحد الأقصى 15 قاعدة', true); return; } ws.brandCore.rules.push(inp.value.trim()); inp.value = ''; await App.persistWorkspace(); App.refreshUI(); }
   async function removeRule(i) { const ws = App.getCurrentWorkspace(); ws.brandCore.rules.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
   async function addOffer() { const t = document.getElementById('new-offer-title').value.trim(), s = document.getElementById('new-offer-segment').value, d = document.getElementById('new-offer-details').value.trim(); if (!t || !d) return; const ws = App.getCurrentWorkspace(); ws.brandCore.offers.push({ id: 'off-' + Date.now(), title: t, segment: s, details: d }); document.getElementById('new-offer-title').value = ''; document.getElementById('new-offer-details').value = ''; await App.persistWorkspace(); App.refreshUI(); }
@@ -218,5 +273,5 @@ const ContentStudio = (() => {
   async function saveBrandCore() { const ws = App.getCurrentWorkspace(); ws.brandCore.identity = document.getElementById('core-identity').value.trim(); ws.brandCore.tone = document.getElementById('core-tone').value.trim(); ws.brandCore.segments = document.getElementById('core-segments').value.trim(); ws.brandCore.materials = document.getElementById('core-materials').value.split(',').map(s => s.trim()).filter(Boolean); await App.persistWorkspace(); App.showToast('تم حفظ الهوية'); }
   async function saveGoal() { const ws = App.getCurrentWorkspace(); ws.goal.objective = document.getElementById('goal-objective-input').value.trim(); await App.persistWorkspace(); App.showToast('تم حفظ الهدف'); }
 
-  return { renderCalendarView, renderMemoryAndIdeasView, selectPost, cyclePostStatus, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
+  return { renderCalendarView, renderMemoryAndIdeasView, selectPost, setPostStatus, excludeIdea, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
 })();
