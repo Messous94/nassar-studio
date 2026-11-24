@@ -184,14 +184,11 @@ const ContentStudio = (() => {
     document.getElementById('core-tone').value = ws.brandCore?.tone || '';
     document.getElementById('core-segments').value = ws.brandCore?.segments || '';
     document.getElementById('core-materials').value = (ws.brandCore?.materials || []).join(', ');
-
     const rules = ws.brandCore?.rules || [];
     document.getElementById('rules-count-badge').textContent = `${rules.length} / 15 قاعدة`;
     document.getElementById('rules-list').innerHTML = rules.map((r, i) => `<li class="p-2 rounded-lg bg-stoneBg border border-borderSubtle flex justify-between gap-2 text-xs"><span>${escapeHtml(r)}</span><button onclick="ContentStudio.removeRule(${i})" class="text-rose-600 font-bold">✕</button></li>`).join('');
-
     const offers = ws.brandCore?.offers || [];
     document.getElementById('offers-list').innerHTML = offers.length === 0 ? `<p class="text-xs text-muted">لا توجد عروض.</p>` : offers.map((o, i) => `<div class="p-2.5 rounded-lg bg-stoneBg border border-borderSubtle text-xs flex justify-between"><div><strong class="text-ink">${escapeHtml(o.title)} (${escapeHtml(o.segment)})</strong><p class="text-muted">${escapeHtml(o.details)}</p></div><button onclick="ContentStudio.removeOffer(${i})" class="text-rose-600 font-bold">✕</button></div>`).join('');
-
     const ideas = ws.ideas || [];
     document.getElementById('ideas-library-grid').innerHTML = ideas.length === 0 ? `<p class="text-xs text-muted col-span-2">مكتبة الأفكار فارغة.</p>` : ideas.map((idea, i) => {
       const pend = idea.status === 'pending';
