@@ -1,25 +1,14 @@
-/**
- * ============================================================================
- * js/content-studio.js
- * Manages:
- * - Period Goals
- * - Ideas & Insights Library + Automatic Saturation Score (+25% per approved post)
- * - 8-Post Calendar & Single Post Generation
- * - Full Team Brief Inspector & One-Click Complete Team Export
- * ============================================================================
- */
-
 const ContentStudio = (() => {
-  const STATUS_FLOW = ['Ù…Ø³ÙˆØ¯Ø©', 'Ù…Ø¹ØªÙ…Ø¯', 'Ø§ØªØ¹Ù…Ù„', 'Ø§ØªØ±ÙØ¹'];
+  const STATUS_FLOW = ['مسودة', 'معتمد', 'اتعمل', 'اترفع'];
   let selectedPostIndex = 0;
 
   function getStatusBadgeClass(status) {
     switch (status) {
-      case 'Ù…Ø¹ØªÙ…Ø¯':
+      case 'معتمد':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'Ø§ØªØ¹Ù…Ù„':
+      case 'اتعمل':
         return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'Ø§ØªØ±ÙØ¹':
+      case 'اترفع':
         return 'bg-ink text-white border-ink';
       default:
         return 'bg-stoneBg text-muted border-borderSubtle';
@@ -32,28 +21,25 @@ const ContentStudio = (() => {
     return 'bg-emerald-600';
   }
 
-  // Render Saturation Strip + Goal Banner + Posts Table + Brief Inspector
   function renderCalendarView(ws) {
-    // 1. Update Goal Display
     const goalInput = document.getElementById('goal-objective-input');
     if (goalInput) goalInput.value = ws.goal?.objective || '';
 
-    // 2. Render Saturation Pills
     const satStrip = document.getElementById('saturation-pills');
     if (satStrip) {
       const approvedIdeas = (ws.ideas || []).filter(i => i.status === 'approved');
       if (approvedIdeas.length === 0) {
-        satStrip.innerHTML = `<span class="text-xs text-muted">Ù„Ø§ ØªÙˆØ¬Ø¯ Ø£ÙÙƒØ§Ø± Ù…Ø¹ØªÙ…Ø¯Ø© Ø¨Ø¹Ø¯ â€” Ø£Ø¶Ù Ø£Ùˆ ÙˆÙ„Ù‘Ø¯ Ø£ÙÙƒØ§Ø±Ø§Ù‹ Ù„ØªØªØ¨Ø¹ Ø§Ù„ØªØ´Ø¨Ø¹.</span>`;
+        satStrip.innerHTML = `<span class="text-xs text-muted">لا توجد أفكار معتمدة بعد — أضف أو ولّد أفكاراً لتتبع التشبع.</span>`;
       } else {
         satStrip.innerHTML = approvedIdeas.slice(0, 5).map(idea => {
           let badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-200';
-          let label = 'Ù…ØªØ§Ø­';
+          let label = 'متاح';
           if (idea.saturation >= 75) {
             badgeStyle = 'bg-rose-50 text-rose-800 border-rose-200';
-            label = 'Ù…Ø´Ø¨Ø¹';
+            label = 'مشبع';
           } else if (idea.saturation >= 50) {
             badgeStyle = 'bg-amber-50 text-amber-800 border-amber-200';
-            label = 'Ù…ØªÙˆØ³Ø·';
+            label = 'متوسط';
           }
           return `<span class="px-2.5 py-1 rounded-md text-xs font-medium border ${badgeStyle}" title="${idea.title}">
             ${label}: ${idea.title.slice(0, 24)}${idea.title.length > 24 ? '...' : ''} (${idea.saturation}%)
@@ -62,7 +48,6 @@ const ContentStudio = (() => {
       }
     }
 
-    // 3. Render Posts Table
     const tbody = document.getElementById('posts-table-body');
     const posts = ws.calendar || [];
     if (!tbody) return;
@@ -71,7 +56,7 @@ const ContentStudio = (() => {
       tbody.innerHTML = `
         <tr>
           <td colspan="5" class="py-12 text-center text-muted text-xs">
-            Ø§Ù„ÙƒØ§Ù„ÙŠÙ†Ø¯Ø± ÙØ§Ø±ØºØ© Ø­Ø§Ù„ÙŠØ§Ù‹. Ø§Ø¶ØºØ· Ø¹Ù„Ù‰ <strong>"ØªÙˆÙ„ÙŠØ¯ ÙƒØ§Ù„ÙŠÙ†Ø¯Ø± (8 Ø¨ÙˆØ³ØªØ§Øª)"</strong> Ù„Ø¨Ù†Ø§Ø¡ Ø®Ø·Ø© Ù…ØªÙƒØ§Ù…Ù„Ø© Ø¨Ø§Ù„ØªÙØ§ØµÙŠÙ„.
+            الكاليندر فارغة حالياً. اضغط على <strong>"توليد كاليندر (8 بوستات)"</strong> لبناء خطة متكاملة بالتفاصيل.
           </td>
         </tr>
       `;
@@ -88,8 +73,8 @@ const ContentStudio = (() => {
         <td class="py-3 px-3 text-muted">${escapeHtml(p.ideaTitle || '-')}</td>
         <td class="py-3 px-3 font-medium text-ink">${escapeHtml(p.material || '-')}</td>
         <td class="py-3 px-3">
-          <button onclick="event.stopPropagation(); ContentStudio.cyclePostStatus(${idx})" class="px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${getStatusBadgeClass(p.status)}" title="Ø§Ø¶ØºØ· Ù„ØªØºÙŠÙŠØ± Ø§Ù„Ø­Ø§Ù„Ø©">
-            ${p.status || 'Ù…Ø³ÙˆØ¯Ø©'}
+          <button onclick="event.stopPropagation(); ContentStudio.cyclePostStatus(${idx})" class="px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${getStatusBadgeClass(p.status)}" title="اضغط لتغيير الحالة">
+            ${p.status || 'مسودة'}
           </button>
         </td>
       </tr>
@@ -100,9 +85,7 @@ const ContentStudio = (() => {
 
   function clearBriefInspector() {
     const panel = document.getElementById('brief-inspector-content');
-    if (panel) {
-      panel.classList.add('opacity-40', 'pointer-events-none');
-    }
+    if (panel) panel.classList.add('opacity-40', 'pointer-events-none');
   }
 
   function renderBriefInspector(post, idx) {
@@ -110,14 +93,14 @@ const ContentStudio = (() => {
     if (!panel || !post) return;
     panel.classList.remove('opacity-40', 'pointer-events-none');
 
-    document.getElementById('brief-badge').textContent = `Ø¨ÙˆØ³Øª #${String(idx + 1).padStart(2, '0')} â€¢ ${post.segment || 'B2C'} â€¢ ${post.ideaTitle || ''}`;
+    document.getElementById('brief-badge').textContent = `بوست #${String(idx + 1).padStart(2, '0')} • ${post.segment || 'B2C'} • ${post.ideaTitle || ''}`;
     document.getElementById('brief-title').textContent = post.title || '';
     document.getElementById('brief-copy').value = post.copy || '';
-    document.getElementById('brief-material').textContent = post.material || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯';
-    document.getElementById('brief-colors').textContent = post.colorPalette || 'Ø£Ù„ÙˆØ§Ù† Ø§Ù„Ù‡ÙˆÙŠØ©';
+    document.getElementById('brief-material').textContent = post.material || 'غير محدد';
+    document.getElementById('brief-colors').textContent = post.colorPalette || 'ألوان الهوية';
     document.getElementById('brief-mood').textContent = post.mood || 'Quiet Luxury';
     document.getElementById('brief-visual').textContent = post.visualDirection || '';
-    document.getElementById('brief-designer').textContent = post.designerBrief || 'ØªØ·Ø¨ÙŠÙ‚ Ø§Ù„Ù‡ÙˆÙŠØ© Ø§Ù„Ù‚ÙŠØ§Ø³ÙŠØ©';
+    document.getElementById('brief-designer').textContent = post.designerBrief || 'تطبيق الهوية القياسية';
 
     const refBox = document.getElementById('brief-ref-image-box');
     const refImg = document.getElementById('brief-ref-image');
@@ -135,42 +118,37 @@ const ContentStudio = (() => {
     App.refreshUI();
   }
 
-  // Cycle Post Status & Automatically Update Idea Saturation when Approved
   async function cyclePostStatus(idx) {
     const ws = App.getCurrentWorkspace();
     const post = ws.calendar[idx];
     if (!post) return;
 
-    const currentStatus = post.status || 'Ù…Ø³ÙˆØ¯Ø©';
+    const currentStatus = post.status || 'مسودة';
     const nextStatus = STATUS_FLOW[(STATUS_FLOW.indexOf(currentStatus) + 1) % STATUS_FLOW.length];
     post.status = nextStatus;
 
-    // Trigger Saturation & Idea Library automation when transitioning to 'Ù…Ø¹ØªÙ…Ø¯'
-    if (nextStatus === 'Ù…Ø¹ØªÙ…Ø¯' && !post.saturationCounted) {
+    if (nextStatus === 'معتمد' && !post.saturationCounted) {
       post.saturationCounted = true;
       await applyIdeaSaturation(ws, post);
     }
 
     await App.persistWorkspace();
     App.refreshUI();
-    App.showToast(`ØªÙ… ØªØºÙŠÙŠØ± Ø­Ø§Ù„Ø© Ø§Ù„Ø¨ÙˆØ³Øª #${idx + 1} Ø¥Ù„Ù‰: ${nextStatus}`);
+    App.showToast(`تم تغيير حالة البوست #${idx + 1} إلى: ${nextStatus}`);
   }
 
   async function applyIdeaSaturation(ws, post) {
     if (!ws.ideas) ws.ideas = [];
-
-    // Check if post matches an existing idea by ID or title
     let matchedIdea = ws.ideas.find(i => i.id === post.ideaId || i.title.trim() === (post.ideaTitle || '').trim());
 
     if (matchedIdea) {
       matchedIdea.saturation = Math.min(100, (matchedIdea.saturation || 0) + 25);
       matchedIdea.status = 'approved';
     } else if (post.ideaTitle) {
-      // Automatically add newly generated idea to Idea Bank with 25% initial saturation
       ws.ideas.unshift({
         id: 'idea-' + Date.now() + '-' + Math.floor(Math.random() * 100),
         title: post.ideaTitle,
-        insight: `ØªÙ… Ø§Ø¨ØªÙƒØ§Ø±Ù‡Ø§ ÙˆØ§Ø¹ØªÙ…Ø§Ø¯Ù‡Ø§ Ø¶Ù…Ù† Ø§Ù„ÙƒØ§Ù„ÙŠÙ†Ø¯Ø± (${post.title})`,
+        insight: `تم ابتكارها واعتمادها ضمن الكاليندر (${post.title})`,
         segment: post.segment || 'B2C',
         saturation: 25,
         status: 'approved'
@@ -184,23 +162,22 @@ const ContentStudio = (() => {
     if (!post) return;
     post.copy = document.getElementById('brief-copy').value;
     await App.persistWorkspace();
-    App.showToast('ØªÙ… Ø­ÙØ¸ ØªØ¹Ø¯ÙŠÙ„ Ù†Øµ Ø§Ù„Ø¨ÙˆØ³Øª');
+    App.showToast('تم حفظ تعديل نص البوست');
   }
 
-  // Generate 8-Post Calendar
   async function handleGenerateCalendar() {
     const btn = document.getElementById('btn-gen-calendar');
     const origHtml = btn.innerHTML;
     try {
       btn.disabled = true;
-      btn.innerHTML = `<span class="spinner ml-1.5"></span> Ø¬Ø§Ø±ÙŠ Ø¨Ù†Ø§Ø¡ Ø§Ù„Ù€ 8 Ø¨ÙˆØ³ØªØ§Øª...`;
+      btn.innerHTML = `<span class="spinner ml-1.5"></span> جاري بناء الـ 8 بوستات...`;
 
       const ws = App.getCurrentWorkspace();
       const generatedPosts = await AIEngine.generateCalendar8(ws);
 
       ws.calendar = generatedPosts.map(p => ({
         ...p,
-        status: 'Ù…Ø³ÙˆØ¯Ø©',
+        status: 'مسودة',
         saturationCounted: false,
         referenceImage: ''
       }));
@@ -208,7 +185,7 @@ const ContentStudio = (() => {
       selectedPostIndex = 0;
       await App.persistWorkspace();
       App.refreshUI();
-      App.showToast('ØªÙ… ØªÙˆÙ„ÙŠØ¯ ÙƒØ§Ù„ÙŠÙ†Ø¯Ø± Ù…Ù† 8 Ø¨ÙˆØ³ØªØ§Øª Ø¨Ø§Ù„ØªÙØ§ØµÙŠÙ„ Ø§Ù„ÙƒØ§Ù…Ù„Ø© Ù„Ù„ØªÙŠÙ…');
+      App.showToast('تم توليد كاليندر من 8 بوستات بالتفاصيل الكاملة للتيم');
     } catch (e) {
       App.showToast(e.message, true);
     } finally {
@@ -217,7 +194,6 @@ const ContentStudio = (() => {
     }
   }
 
-  // Generate Single Post
   async function handleGenerateSinglePost() {
     const btn = document.getElementById('btn-gen-single');
     const origHtml = btn.innerHTML;
@@ -226,14 +202,14 @@ const ContentStudio = (() => {
 
     try {
       btn.disabled = true;
-      btn.innerHTML = `<span class="spinner spinner-dark ml-1.5"></span> Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªÙˆÙ„ÙŠØ¯...`;
+      btn.innerHTML = `<span class="spinner spinner-dark ml-1.5"></span> جاري التوليد...`;
 
       const ws = App.getCurrentWorkspace();
       const post = await AIEngine.generateSinglePost(ws, note);
 
       ws.calendar.unshift({
         ...post,
-        status: 'Ù…Ø³ÙˆØ¯Ø©',
+        status: 'مسودة',
         saturationCounted: false,
         referenceImage: ''
       });
@@ -242,7 +218,7 @@ const ContentStudio = (() => {
       selectedPostIndex = 0;
       await App.persistWorkspace();
       App.refreshUI();
-      App.showToast('ØªÙ…Øª Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ø¨ÙˆØ³Øª Ø§Ù„ÙØ±Ø¯ÙŠ Ø¥Ù„Ù‰ Ø§Ù„Ø¬Ø¯ÙˆÙ„');
+      App.showToast('تمت إضافة البوست الفردي إلى الجدول');
     } catch (e) {
       App.showToast(e.message, true);
     } finally {
@@ -251,7 +227,6 @@ const ContentStudio = (() => {
     }
   }
 
-  // Generate Reference Image for Selected Post
   async function handleGenerateRefImage() {
     const ws = App.getCurrentWorkspace();
     const post = ws.calendar[selectedPostIndex];
@@ -262,13 +237,13 @@ const ContentStudio = (() => {
 
     try {
       btn.disabled = true;
-      btn.innerHTML = `<span class="spinner ml-1.5"></span> Ø¬Ø§Ø±ÙŠ ØªÙˆÙ„ÙŠØ¯ Ø§Ù„Ø±ÙŠÙØ±Ù†Ø³...`;
+      btn.innerHTML = `<span class="spinner ml-1.5"></span> جاري توليد الريفرنس...`;
 
       const imgDataUrl = await AIEngine.generateReferenceImage(post);
       post.referenceImage = imgDataUrl;
       await App.persistWorkspace();
       App.refreshUI();
-      App.showToast('ØªÙ… ØªÙˆÙ„ÙŠØ¯ ØµÙˆØ±Ø© Ø§Ù„Ø±ÙŠÙØ±Ù†Ø³ ÙˆØ­ÙØ¸Ù‡Ø§ Ù„Ù„Ø¨ÙˆØ³Øª');
+      App.showToast('تم توليد صورة الريفرنس وحفظها للبوست');
     } catch (e) {
       App.showToast(e.message, true);
     } finally {
@@ -277,14 +252,13 @@ const ContentStudio = (() => {
     }
   }
 
-  // Export Complete Calendar & Visual Briefs for the Team
   function exportTeamCalendarFile() {
     const ws = App.getCurrentWorkspace();
     const company = App.getCurrentCompany();
     const posts = ws.calendar || [];
 
     if (posts.length === 0) {
-      App.showToast('Ù„Ø§ ØªÙˆØ¬Ø¯ Ø¨ÙˆØ³ØªØ§Øª ÙÙŠ Ø§Ù„ÙƒØ§Ù„ÙŠÙ†Ø¯Ø± Ù„ØªØµØ¯ÙŠØ±Ù‡Ø§.', true);
+      App.showToast('لا توجد بوستات في الكاليندر لتصديرها.', true);
       return;
     }
 
@@ -293,7 +267,7 @@ const ContentStudio = (() => {
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>ÙƒØ§Ù„ÙŠÙ†Ø¯Ø± ÙˆØ¨Ø±ÙŠÙ Ø§Ù„ØªÙŠÙ… â€” ${escapeHtml(company.name)} (${dateStr})</title>
+<title>كاليندر وبريف التيم — ${escapeHtml(company.name)} (${dateStr})</title>
 <style>
   body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #F8F7F4; color: #141413; padding: 32px; line-height: 1.6; }
   .header { background: #141413; color: #F8F7F4; padding: 24px 32px; border-radius: 12px; margin-bottom: 24px; }
@@ -310,8 +284,8 @@ const ContentStudio = (() => {
 </head>
 <body>
   <div class="header">
-    <h1>ÙƒØ§Ù„ÙŠÙ†Ø¯Ø± Ø§Ù„Ù…Ø­ØªÙˆÙ‰ ÙˆØ§Ù„Ø¨Ø±ÙŠÙ Ø§Ù„ØªÙ†ÙÙŠØ°ÙŠ Ù„Ù„ØªÙŠÙ… â€” ${escapeHtml(company.name)}</h1>
-    <p>ØªØ§Ø±ÙŠØ® Ø§Ù„ØªØµØ¯ÙŠØ±: ${dateStr} | Ù‡Ø¯Ù Ø§Ù„ÙØªØ±Ø©: ${escapeHtml(ws.goal?.objective || '')}</p>
+    <h1>كاليندر المحتوى والبريف التنفيذي للتيم — ${escapeHtml(company.name)}</h1>
+    <p>تاريخ التصدير: ${dateStr} | هدف الفترة: ${escapeHtml(ws.goal?.objective || '')}</p>
   </div>
 `;
 
@@ -319,22 +293,22 @@ const ContentStudio = (() => {
       htmlContent += `
   <div class="post-card">
     <div>
-      <span class="badge">Ø¨ÙˆØ³Øª #${String(idx + 1).padStart(2, '0')} â€¢ ${escapeHtml(p.segment || 'B2C')}</span>
-      <span class="status">Ø§Ù„Ø­Ø§Ù„Ø©: ${escapeHtml(p.status || 'Ù…Ø³ÙˆØ¯Ø©')}</span>
+      <span class="badge">بوست #${String(idx + 1).padStart(2, '0')} • ${escapeHtml(p.segment || 'B2C')}</span>
+      <span class="status">الحالة: ${escapeHtml(p.status || 'مسودة')}</span>
     </div>
     <h2 style="margin: 10px 0 4px 0; font-size: 18px;">${escapeHtml(p.title)}</h2>
-    <div style="font-size: 12px; color: #6E6D68;">Ø§Ù„ÙÙƒØ±Ø© / Ø§Ù„Ø²Ø§ÙˆÙŠØ©: ${escapeHtml(p.ideaTitle || '-')}</div>
+    <div style="font-size: 12px; color: #6E6D68;">الفكرة / الزاوية: ${escapeHtml(p.ideaTitle || '-')}</div>
 
     <div class="copy-box">${escapeHtml(p.copy || '')}</div>
 
     <div class="grid">
-      <div class="meta"><strong>Ø§Ù„Ø®Ø§Ù…Ø© / Ø§Ù„Ù…Ù†ØªØ¬</strong>${escapeHtml(p.material || '-')}</div>
-      <div class="meta"><strong>Ø¯Ø±Ø¬Ø© Ø§Ù„Ø£Ù„ÙˆØ§Ù† Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø©</strong>${escapeHtml(p.colorPalette || '-')}</div>
-      <div class="meta"><strong>Ø§Ù„Ø¬Ùˆ Ø§Ù„Ø¹Ø§Ù… (Mood)</strong>${escapeHtml(p.mood || '-')}</div>
-      <div class="meta"><strong>Ø¨Ø±ÙŠÙ Ø§Ù„ØªØ¹Ø¯ÙŠÙ„ ÙˆØ§Ù„ØªÙ…Ø¨Ù„ÙŠØª Ù„Ù„Ø¯ÙŠØ²Ø§ÙŠÙ†Ø±</strong>${escapeHtml(p.designerBrief || '-')}</div>
+      <div class="meta"><strong>الخامة / المنتج</strong>${escapeHtml(p.material || '-')}</div>
+      <div class="meta"><strong>درجة الألوان المطلوبة</strong>${escapeHtml(p.colorPalette || '-')}</div>
+      <div class="meta"><strong>الجو العام (Mood)</strong>${escapeHtml(p.mood || '-')}</div>
+      <div class="meta"><strong>بريف التعديل والتمبليت للديزاينر</strong>${escapeHtml(p.designerBrief || '-')}</div>
     </div>
     <div class="meta" style="margin-top: 12px;">
-      <strong>ØªØµÙˆØ± ÙˆØ´ÙƒÙ„ Ø§Ù„ØµÙˆØ±Ø© Ù„Ù„ØªÙ†ÙÙŠØ° / Ø§Ù„ØªØµÙˆÙŠØ± (Visual Direction)</strong>
+      <strong>تصور وشكل الصورة للتنفيذ / التصوير (Visual Direction)</strong>
       ${escapeHtml(p.visualDirection || '-')}
     </div>
   </div>`;
@@ -349,34 +323,30 @@ const ContentStudio = (() => {
     a.download = `${company.id}-team-calendar-${dateStr}.html`;
     a.click();
     URL.revokeObjectURL(url);
-    App.showToast('ØªÙ… ØªÙ†Ø²ÙŠÙ„ Ù…Ù„Ù Ø§Ù„ÙƒØ§Ù„ÙŠÙ†Ø¯Ø± Ø§Ù„ÙƒØ§Ù…Ù„ Ø¨Ø§Ù„ØªÙØ§ØµÙŠÙ„ Ù„Ù„ØªÙŠÙ…');
+    App.showToast('تم تنزيل ملف الكاليندر الكامل بالتفاصيل للتيم');
   }
 
-  // --- Ideas & Memory View Rendering ---
   function renderMemoryAndIdeasView(ws) {
-    // 1. Brand Core Fields
     document.getElementById('core-identity').value = ws.brandCore?.identity || '';
     document.getElementById('core-tone').value = ws.brandCore?.tone || '';
     document.getElementById('core-segments').value = ws.brandCore?.segments || '';
     document.getElementById('core-materials').value = (ws.brandCore?.materials || []).join(', ');
 
-    // 2. Active Rules (Max 15)
     const rulesList = document.getElementById('rules-list');
     const rules = ws.brandCore?.rules || [];
-    document.getElementById('rules-count-badge').textContent = `${rules.length} / 15 Ù‚Ø§Ø¹Ø¯Ø©`;
+    document.getElementById('rules-count-badge').textContent = `${rules.length} / 15 قاعدة`;
 
     rulesList.innerHTML = rules.map((r, idx) => `
       <li class="p-2.5 rounded-lg bg-stoneBg border border-borderSubtle flex items-start justify-between gap-2 text-xs">
         <span class="text-ink leading-relaxed">${escapeHtml(r)}</span>
-        <button onclick="ContentStudio.removeRule(${idx})" class="text-rose-600 hover:text-rose-800 font-bold px-1.5 shrink-0" title="Ø­Ø°Ù Ø§Ù„Ù‚Ø§Ø¹Ø¯Ø©">âœ•</button>
+        <button onclick="ContentStudio.removeRule(${idx})" class="text-rose-600 hover:text-rose-800 font-bold px-1.5 shrink-0" title="حذف القاعدة">✕</button>
       </li>
     `).join('');
 
-    // 3. Offers Library
     const offersList = document.getElementById('offers-list');
     const offers = ws.brandCore?.offers || [];
     offersList.innerHTML = offers.length === 0
-      ? `<p class="text-xs text-muted">Ù„Ø§ ØªÙˆØ¬Ø¯ Ø¹Ø±ÙˆØ¶ Ù…Ø³Ø¬Ù„Ø© Ø­Ø§Ù„ÙŠØ§Ù‹.</p>`
+      ? `<p class="text-xs text-muted">لا توجد عروض مسجلة حالياً.</p>`
       : offers.map((o, idx) => `
         <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle text-xs flex items-start justify-between gap-2">
           <div>
@@ -384,15 +354,14 @@ const ContentStudio = (() => {
             <strong class="block text-ink">${escapeHtml(o.title)}</strong>
             <p class="text-muted mt-0.5">${escapeHtml(o.details)}</p>
           </div>
-          <button onclick="ContentStudio.removeOffer(${idx})" class="text-rose-600 font-bold px-1">âœ•</button>
+          <button onclick="ContentStudio.removeOffer(${idx})" class="text-rose-600 font-bold px-1">✕</button>
         </div>
       `).join('');
 
-    // 4. Ideas & Saturation Library
     const ideasGrid = document.getElementById('ideas-library-grid');
     const ideas = ws.ideas || [];
     ideasGrid.innerHTML = ideas.length === 0
-      ? `<p class="text-xs text-muted col-span-2">Ù…ÙƒØªØ¨Ø© Ø§Ù„Ø£ÙÙƒØ§Ø± ÙØ§Ø±ØºØ©. Ø§Ø¶ØºØ· "ØªÙˆÙ„ÙŠØ¯ Ø£ÙÙƒØ§Ø± Ùˆ Insights" Ù„Ù„Ø¨Ø¯Ø¡.</p>`
+      ? `<p class="text-xs text-muted col-span-2">مكتبة الأفكار فارغة. اضغط "توليد أفكار و Insights" للبدء.</p>`
       : ideas.map((idea, idx) => {
         const isPending = idea.status === 'pending';
         return `
@@ -400,20 +369,20 @@ const ContentStudio = (() => {
             <div class="flex items-start justify-between gap-2">
               <div>
                 <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-stoneBg border border-borderSubtle text-ink">${escapeHtml(idea.segment || 'B2C')}</span>
-                ${isPending ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-bronze text-white mr-1">Ø¨Ø§Ù†ØªØ¸Ø§Ø± Ø§Ù„Ø§Ø¹ØªÙ…Ø§Ø¯</span>' : ''}
+                ${isPending ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-bronze text-white mr-1">بانتظار الاعتماد</span>' : ''}
               </div>
-              <button onclick="ContentStudio.deleteIdea(${idx})" class="text-xs text-muted hover:text-rose-600">âœ•</button>
+              <button onclick="ContentStudio.deleteIdea(${idx})" class="text-xs text-muted hover:text-rose-600">✕</button>
             </div>
             <h4 class="text-xs font-bold text-ink">${escapeHtml(idea.title)}</h4>
             <p class="text-[11px] text-muted leading-relaxed">${escapeHtml(idea.insight || '')}</p>
             ${isPending ? `
               <button onclick="ContentStudio.approveIdea(${idx})" class="w-full py-1.5 rounded-lg text-xs font-bold bg-ink text-white hover:bg-ink/90 transition">
-                Ø§Ø¹ØªÙ…Ø§Ø¯ ÙˆØ¥Ø¶Ø§ÙØ© Ù„Ù†Ø¸Ø§Ù… Ø§Ù„ØªØ´Ø¨Ø¹ âœ“
+                اعتماد وإضافة لنظام التشبع ✓
               </button>
             ` : `
               <div class="pt-1 space-y-1">
                 <div class="flex justify-between text-[11px] font-semibold">
-                  <span class="text-muted">Ù†Ø³Ø¨Ø© Ø§Ù„ØªØ´Ø¨Ø¹</span>
+                  <span class="text-muted">نسبة التشبع</span>
                   <span class="text-ink">${idea.saturation}%</span>
                 </div>
                 <div class="sat-bar">
@@ -431,7 +400,7 @@ const ContentStudio = (() => {
     const origHtml = btn.innerHTML;
     try {
       btn.disabled = true;
-      btn.innerHTML = `<span class="spinner ml-1.5"></span> Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø§Ø³ØªÙ†Ø¨Ø§Ø·...`;
+      btn.innerHTML = `<span class="spinner ml-1.5"></span> جاري الاستنباط...`;
 
       const ws = App.getCurrentWorkspace();
       const newIdeas = await AIEngine.generateIdeas(ws, 4);
@@ -449,7 +418,7 @@ const ContentStudio = (() => {
 
       await App.persistWorkspace();
       App.refreshUI();
-      App.showToast('ØªÙ… ØªÙˆÙ„ÙŠØ¯ 4 Ø£ÙÙƒØ§Ø± Ø¬Ø¯ÙŠØ¯Ø© â€” Ø§Ø¹ØªÙ…Ø¯ Ù…Ø§ ÙŠÙ†Ø§Ø³Ø¨Ùƒ Ù„Ø¥Ø¯Ø®Ø§Ù„Ù‡ Ù†Ø¸Ø§Ù… Ø§Ù„ØªØ´Ø¨Ø¹');
+      App.showToast('تم توليد 4 أفكار جديدة — اعتمد ما يناسبك لإدخاله نظام التشبع');
     } catch (e) {
       App.showToast(e.message, true);
     } finally {
@@ -465,7 +434,7 @@ const ContentStudio = (() => {
     ws.ideas[idx].saturation = 0;
     await App.persistWorkspace();
     App.refreshUI();
-    App.showToast('ØªÙ… Ø§Ø¹ØªÙ…Ø§Ø¯ Ø§Ù„ÙÙƒØ±Ø© ÙˆØ¥Ø¶Ø§ÙØªÙ‡Ø§ Ù„Ù†Ø¸Ø§Ù… Ø§Ù„ØªØ´Ø¨Ø¹');
+    App.showToast('تم اعتماد الفكرة وإضافتها لنظام التشبع');
   }
 
   async function deleteIdea(idx) {
@@ -482,7 +451,7 @@ const ContentStudio = (() => {
 
     const ws = App.getCurrentWorkspace();
     if (ws.brandCore.rules.length >= 15) {
-      App.showToast('ÙˆØµÙ„Øª Ù„Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ (15 Ù‚Ø§Ø¹Ø¯Ø© Ù†Ø´Ø·Ø©) Ù„Ù„Ø­ÙØ§Ø¸ Ø¹Ù„Ù‰ ÙƒÙØ§Ø¡Ø© Ø§Ù„ØªÙˆÙƒÙ†Ø². Ø§Ø­Ø°Ù Ù‚Ø§Ø¹Ø¯Ø© Ù‚Ø¯ÙŠÙ…Ø© Ø£ÙˆÙ„Ø§Ù‹.', true);
+      App.showToast('وصلت للحد الأقصى (15 قاعدة نشطة). احذف قاعدة قديمة أولاً.', true);
       return;
     }
 
@@ -490,7 +459,7 @@ const ContentStudio = (() => {
     input.value = '';
     await App.persistWorkspace();
     App.refreshUI();
-    App.showToast('ØªÙ…Øª Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ù‚Ø§Ø¹Ø¯Ø© Ù„Ø°Ø§ÙƒØ±Ø© Ù…Ù†Ø¹ Ø§Ù„ØªÙƒØ±Ø§Ø±');
+    App.showToast('تمت إضافة القاعدة لذاكرة منع التكرار');
   }
 
   async function removeRule(idx) {
@@ -512,7 +481,7 @@ const ContentStudio = (() => {
     document.getElementById('new-offer-details').value = '';
     await App.persistWorkspace();
     App.refreshUI();
-    App.showToast('ØªÙ… Ø­ÙØ¸ Ø§Ù„Ø¹Ø±Ø¶ ÙÙŠ Ù…ÙƒØªØ¨Ø© Ø§Ù„Ø¹Ø±ÙˆØ¶');
+    App.showToast('تم حفظ العرض في مكتبة العروض');
   }
 
   async function removeOffer(idx) {
@@ -527,49 +496,4 @@ const ContentStudio = (() => {
     ws.brandCore.identity = document.getElementById('core-identity').value.trim();
     ws.brandCore.tone = document.getElementById('core-tone').value.trim();
     ws.brandCore.segments = document.getElementById('core-segments').value.trim();
-    ws.brandCore.materials = document.getElementById('core-materials').value
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
-
-    await App.persistWorkspace();
-    App.showToast('ØªÙ… Ø­ÙØ¸ Ø¯Ø³ØªÙˆØ± Ø§Ù„Ø¨Ø±Ø§Ù†Ø¯ ÙˆØ§Ù„Ø®Ø§Ù…Ø§Øª');
-  }
-
-  async function saveGoal() {
-    const ws = App.getCurrentWorkspace();
-    ws.goal.objective = document.getElementById('goal-objective-input').value.trim();
-    await App.persistWorkspace();
-    App.showToast('ØªÙ… ØªØ­Ø¯ÙŠØ« Ù‡Ø¯Ù Ø§Ù„ÙØªØ±Ø© Ù„ØªÙˆØ¬ÙŠÙ‡ Ø§Ù„ØªÙˆÙ„ÙŠØ¯ ÙˆØ§Ù„ØªØ­Ù„ÙŠÙ„Ø§Øª');
-  }
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  return {
-    renderCalendarView,
-    renderMemoryAndIdeasView,
-    selectPost,
-    cyclePostStatus,
-    saveEditedCopy,
-    handleGenerateCalendar,
-    handleGenerateSinglePost,
-    handleGenerateRefImage,
-    exportTeamCalendarFile,
-    handleGenerateIdeas,
-    approveIdea,
-    deleteIdea,
-    addRule,
-    removeRule,
-    addOffer,
-    removeOffer,
-    saveBrandCore,
-    saveGoal
-  };
-})();
+    ws.brandCore.materials = docum
