@@ -68,6 +68,10 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
         if (e instanceof TypeError) { lastError = e.message; continue; } // مشكلة شبكة
         throw e;
       }
+    }
+    throw new Error(`All Gemini models failed: ${lastError}`);
+  }
+
   async function callGeminiJSON(promptText, systemInstruction = '') {
     const payload = {
       contents: [{ role: 'user', parts: [{ text: promptText }] }],
@@ -278,4 +282,4 @@ ${yesterdaySummary ? JSON.stringify(yesterdaySummary, null, 2) : 'لا توجد 
     searchAndUpdatePlatformRules,
     analyzeAdsWithRules
   };
-})
+})();
