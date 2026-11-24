@@ -278,4 +278,4 @@ ${yesterdaySummary ? JSON.stringify(yesterdaySummary, null, 2) : 'لا توجد 
     searchAndUpdatePlatformRules,
     analyzeAdsWithRules
   };
-})();
+})
