@@ -44,7 +44,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     let lastError = '';
 
     for (const model of TEXT_MODELS) {
-      const url = `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
       try {
         const res = await fetch(url, {
           method: 'POST',
@@ -86,9 +86,12 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     try {
       return JSON.parse(rawText);
     } catch (e) {
-      const cleaned = rawText.replace(/^
-```json\s*/i, '').replace(/```\s*$/i, '').trim();
-      return JSON.parse(cleaned);
+      const firstBrace = rawText.indexOf('{');
+      const lastBrace = rawText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        return JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
+      }
+      throw new Error('تعذر قراءة رد الذكاء الاصطناعي كـ JSON.');
     }
   }
 
@@ -101,7 +104,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
 المطلوب:
 توليد كاليندر فيسبوك متكاملة مكونة من 8 بوستات متنوعة ومتوازنة تخدم هدف الفترة وتلتزم بالقواعد.
 - استخدم الأفكار المتاحة غير المشبعة قدر الإمكان، وإذا احتجت أفكاراً إضافية لتكملة الـ 8 بوستات ابتكر أفكاراً جديدة غير مكررة.
-- لكل بوست، اكتب التفاصيل الكاملة للتيم (النص النهائي، الفكرة، الخامة، تصور الصورة بدقة، درجة الألوان، الجو العام، وبريف واضح للتعديل للديزاينر إن وجد).
+- لكل بوست، اكتب التفاصيل الكاملة للتيم (النص النهائي، الفكرة، الخامة، تصور الصورة بدقة، درجة الألوان، الجو العام، وبريف واضح للتعديل للديزاينر).
 
 أخرج النتيجة بصيغة JSON مطابقة تماماً لهذا الهيكل:
 {
@@ -183,7 +186,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     const apiKey = getApiKey();
     const prompt = `Architectural luxury interior photography, ${post.material || 'natural quartz stone surface'}, ${post.visualDirection}. Color palette: ${post.colorPalette}. Mood: ${post.mood}. Quiet luxury aesthetic, soft natural directional lighting, ultra clean composition, 8k photorealistic, no text, no watermarks.`;
 
-    const url = `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){IMAGE_MODEL}:predict?key=${encodeURIComponent(apiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:predict?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -195,7 +198,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`تعذر توليد صورة الريفرنس (${res.status}): ${errText}`);
+      throw new Error(`تعذر توليد صورة الريفرنس (${res.status}): تأكد من تفعيل Imagen API على مفتاحك. التفاصيل: ${errText}`);
     }
 
     const data = await res.json();
