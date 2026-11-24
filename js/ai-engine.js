@@ -52,20 +52,22 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
           body: JSON.stringify(payload)
         });
 
+
         if (res.ok) return await res.json();
 
         const errText = await res.text();
         lastError = `(${res.status}): ${errText}`;
-        if (res.status === 404) continue;
+
+        // جرّب الموديل اللي بعده في الأخطاء المؤقتة
+        if ([404, 429, 500, 502, 503, 504].includes(res.status)) {
+          await new Promise(r => setTimeout(r, 800));
+          continue;
+        }
         throw new Error(`Gemini API Error ${lastError}`);
       } catch (e) {
-        if (e.message && e.message.includes('404')) continue;
+        if (e instanceof TypeError) { lastError = e.message; continue; } // مشكلة شبكة
         throw e;
       }
-    }
-    throw new Error(`تعذر الاتصال بنماذج Gemini المتاحة. آخر خطأ: ${lastError}`);
-  }
-
   async function callGeminiJSON(promptText, systemInstruction = '') {
     const payload = {
       contents: [{ role: 'user', parts: [{ text: promptText }] }],
