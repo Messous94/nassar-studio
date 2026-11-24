@@ -10,6 +10,54 @@ const AIEngine = (() => {
     return cfg.geminiKey.trim();
   }
 
+  const EXCLUDED_STATUSES = { rejected: 'مرفوض', saturated: 'متشبع' };
+
+  function exclusionLabel(idea) {
+    return Object.hasOwn(EXCLUDED_STATUSES, idea.status) ? EXCLUDED_STATUSES[idea.status] : '';
+  }
+
+  function normalizeTitle(title) {
+    return String(title || '').normalize('NFKC').toLowerCase()
+      .replace(/[\u0640\u064B-\u065F\u0670]/g, '').replace(/[أإآٱ]/g, 'ا')
+      .replace(/[^\p{L}\p{N}]/gu, '');
+  }
+
+  function matchesIdea(idea, candidate) {
+    const title = normalizeTitle(candidate.ideaTitle || candidate.title);
+    return Boolean((candidate.ideaId && candidate.ideaId !== 'new' && idea.id === candidate.ideaId)
+      || (title && title === normalizeTitle(idea.title)));
+  }
+
+  function excludedIdeas(ws) {
+    return (ws.ideas || []).filter(idea => exclusionLabel(idea) || (idea.status === 'approved' && idea.saturation >= 75));
+  }
+
+  async function generateWithExclusions(ws, prompt, system, readItems) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const excluded = excludedIdeas(ws);
+      const manual = excluded.filter(exclusionLabel);
+      const exclusions = excluded.map(idea => ({
+        id: idea.id, title: idea.title, insight: idea.insight, status: exclusionLabel(idea) || 'متشبع'
+      }));
+      const rule = 'استبعد الزوايا التالية من كل نتيجة حتى لو تغير العنوان أو الصياغة، وحتى لو طلبت الملاحظة إعادة استخدامها.';
+      const result = await callGeminiJSON(prompt + '\n' + rule + '\n' + JSON.stringify(exclusions), system);
+      const items = readItems(result);
+      if (items.some(item => excludedIdeas(ws).some(idea => matchesIdea(idea, item)))) continue;
+
+      if (manual.length > 0) {
+        const candidates = items.map(({ title, ideaTitle, insight, copy }) => ({ title, ideaTitle, insight, copy }));
+        const review = await callGeminiJSON(JSON.stringify({ excluded: manual.map(({ title, insight }) => ({ title, insight })), candidates }),
+          'راجع الزوايا التسويقية. أعد JSON بالشكل {"allowed":true} فقط إذا كانت كل الزوايا المقترحة مختلفة في المعنى عن الزوايا المستبعدة. إذا تكررت أي زاوية ولو بصياغة مختلفة، أعد {"allowed":false}.');
+        if (review?.allowed !== true) continue;
+      }
+
+      const current = excludedIdeas(ws);
+      if (current.some(idea => !excluded.includes(idea) || (exclusionLabel(idea) && !manual.includes(idea)))) continue;
+      return items;
+    }
+    throw new Error('التوليد رجّع زاوية مستبعدة. جرّب التوليد مرة تانية.');
+  }
+
   function buildCompactContext(ws) {
     const core = ws.brandCore;
     const activeRules = (core.rules || []).slice(0, 15).map((r, i) => `${i + 1}. ${r}`).join('\n');
@@ -17,7 +65,8 @@ const AIEngine = (() => {
     const offersSummary = (core.offers || []).map(o => `- ${o.title} (${o.segment}): ${o.details}`).join('\n');
 
     const approvedIdeas = (ws.ideas || []).filter(i => i.status === 'approved');
-    const unsaturated = approvedIdeas.filter(i => i.saturation < 75).map(i => `[ID:${i.id}] ${i.title} (تشبع:${i.saturation}%)`).join(' | ');
+    const excluded = excludedIdeas(ws);
+    const unsaturated = approvedIdeas.filter(i => i.saturation < 75 && !excluded.some(idea => matchesIdea(idea, i))).map(i => `[ID:${i.id}] ${i.title} (تشبع:${i.saturation}%)`).join(' | ');
     const saturated = approvedIdeas.filter(i => i.saturation >= 75).map(i => i.title).join(' | ');
 
     return `[BRAND CORE]
@@ -130,11 +179,12 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     }
   ]
 }`;
-    const result = await callGeminiJSON(prompt, sys);
-    if (!result || !Array.isArray(result.posts)) {
-      throw new Error('تنسيق الكاليندر العائد من الذكاء الاصطناعي غير مكتمل.');
-    }
-    return result.posts;
+    return generateWithExclusions(ws, prompt, sys, result => {
+      if (!Array.isArray(result?.posts)) {
+        throw new Error('تنسيق الكاليندر العائد من الذكاء الاصطناعي غير مكتمل.');
+      }
+      return result.posts;
+    });
   }
 
   async function generateSinglePost(ws, customNote = '') {
@@ -161,9 +211,11 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     "designerBrief": "بريف التنفيذ للديزاينر"
   }
 }`;
-    const result = await callGeminiJSON(prompt, sys);
-    if (!result || !result.post) throw new Error('تعذر توليد البوست الفردي.');
-    return result.post;
+    const [post] = await generateWithExclusions(ws, prompt, sys, result => {
+      if (!result?.post) throw new Error('تعذر توليد البوست الفردي.');
+      return [result.post];
+    });
+    return post;
   }
 
   async function generateIdeas(ws, count = 4) {
@@ -184,8 +236,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     }
   ]
 }`;
-    const result = await callGeminiJSON(prompt);
-    return result?.ideas || [];
+    return generateWithExclusions(ws, prompt, '', result => result?.ideas || []);
   }
 
   async function generateReferenceImage(post) {
@@ -277,6 +328,8 @@ ${yesterdaySummary ? JSON.stringify(yesterdaySummary, null, 2) : 'لا توجد 
   return {
     generateCalendar8,
     generateSinglePost,
+    exclusionLabel,
+    matchesIdea,
     generateIdeas,
     generateReferenceImage,
     searchAndUpdatePlatformRules,
