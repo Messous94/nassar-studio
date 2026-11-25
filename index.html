@@ -10,6 +10,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
+  .reference-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; }
+  .reference-card { border: 1px solid #E6E4DD; border-radius: 12px; overflow: hidden; background: #fff; min-width: 0; }
+  .reference-preview { display: block; width: 100%; background: #F8F7F4; height: 170px; }
+  .reference-preview img { width: 100%; height: 100%; object-fit: contain; }
+  .reference-details { display: grid; gap: 8px; padding: 12px; }
+  .reference-post-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+  .reference-post-grid img { width: 100%; height: 100px; object-fit: contain; border-radius: 8px; background: #F8F7F4; }
+  #reference-edit-preview { width: 100%; max-height: 36dvh; object-fit: contain; background: #F8F7F4; border-radius: 10px; }
   :root { --bg-stone: #F8F7F4; --bg-surface: #FFFFFF; --text-ink: #141413; --text-muted: #6E6D68; --border-subtle: #E6E4DD; --accent-bronze: #9A7B4F; --accent-bronze-soft: #F5EFE6; }
   * { box-sizing: border-box; }
   body { background-color: var(--bg-stone); color: var(--text-ink); font-family: 'Cairo', sans-serif; margin: 0; padding: 0; }
@@ -147,6 +155,11 @@
         </div>
       </div>
 
+      <div class="glass-card rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span id="reference-selection-summary">التوليد من غير صور مختارة</span>
+        <button onclick="App.switchTab('assets')" class="font-bold text-bronze">اختيار صور للتوليد</button>
+      </div>
+
       <!-- Split Workspace: Posts Table + Full Visual Brief Inspector -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
 
@@ -220,6 +233,7 @@
           </div>
 
           <!-- Reference Image Preview (if generated) -->
+          <div id="post-reference-images" class="space-y-2"></div>
           <div id="brief-ref-image-box" class="hidden rounded-xl overflow-hidden border border-borderSubtle">
             <img id="brief-ref-image" src="" alt="صورة ريفرنس" class="w-full h-48 object-cover" />
           </div>
@@ -318,6 +332,29 @@
 
     <!-- ==================== VIEW 3: ASSETS & DELIVERED PROJECTS REFERENCE ==================== -->
     <section id="view-assets" class="hidden space-y-5">
+      <div class="glass-card rounded-xl p-4 sm:p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div><h2 class="text-sm font-bold">مكتبة الصور والمرجعيات</h2><p class="text-xs text-muted mt-1">ارفع صور شغلك والخامات ومراجع التصميم. الصور المختارة بتتبعت لـ Google عند توليد الأفكار والبوستات. الصور بتتحفظ على الجهاز وتتزامن مع ريبو البيانات عند تفعيل الربط.</p></div>
+          <span id="reference-selection-count" class="text-xs font-bold">0 / 4 صور مختارة</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <label class="space-y-1">نوع الصور<select id="reference-upload-kind" class="block w-full p-2 rounded-lg border border-borderSubtle"><option value="project">شغل منفّذ</option><option value="material">خامة</option><option value="design">مرجع تصميم</option><option value="logo">لوجو وهوية</option></select></label>
+          <label class="space-y-1">الخامة أو المنتج المسجّل منك<input id="reference-upload-material" maxlength="200" placeholder="البراند والموديل إن كانوا معروفين" class="block w-full p-2 rounded-lg border border-borderSubtle" /></label>
+          <label class="space-y-1 sm:col-span-2">وصف الصور أو ملاحظاتك<textarea id="reference-upload-description" maxlength="2000" rows="2" placeholder="المشروع، أو التفاصيل المهمة في المرجع..." class="block w-full p-2 rounded-lg border border-borderSubtle"></textarea></label>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="cursor-pointer px-4 py-2 rounded-lg bg-ink text-white font-bold text-xs">رفع صور
+            <input id="reference-upload-files" type="file" accept="image/jpeg,image/png,image/webp" multiple onchange="AssetLibrary.upload(event)" class="hidden" />
+          </label><p class="text-[11px] text-muted">JPG / PNG / WebP · لحد 10 صور في المرة · 10 ميجابايت للصورة الأصلية. الصور بتتجهّز تلقائيًا بحجم مناسب.</p>
+        </div>
+        <p id="reference-upload-status" role="status" aria-live="polite" class="text-xs text-muted break-words"></p>
+        <div class="flex flex-wrap gap-2 text-xs border-t border-borderSubtle pt-3">
+          <input id="reference-search" aria-label="البحث في الصور" oninput="AssetLibrary.render(App.getCurrentWorkspace())" placeholder="بحث بالاسم أو الخامة أو الوصف" class="min-w-0 flex-1 p-2 rounded-lg border border-borderSubtle" />
+          <select id="reference-kind-filter" aria-label="تصفية نوع المرجع" onchange="AssetLibrary.render(App.getCurrentWorkspace())" class="p-2 rounded-lg border border-borderSubtle"><option value="">كل الأنواع</option><option value="project">شغل منفّذ</option><option value="material">خامة</option><option value="design">مرجع تصميم</option><option value="logo">لوجو وهوية</option></select>
+          <button onclick="AssetLibrary.clearSelection()" class="p-2 rounded-lg bg-stoneBg border border-borderSubtle">إلغاء اختيار الصور</button>
+        </div>
+        <div id="reference-library-grid" class="reference-grid"></div>
+      </div>
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
         <!-- Delivered Projects Reference Log (7 cols) -->
@@ -518,7 +555,7 @@
 
       <div class="space-y-2 pt-3 border-t border-borderSubtle text-xs">
         <h4 class="font-bold text-ink">حماية بيانات الشركة الحالية</h4>
-        <p class="text-muted">النسخة تشمل المحتوى والأفكار والمرجعيات ونتائج الإعلانات للشركة المفتوحة. مفاتيح الربط وقواعد المنصات العامة مش ضمن الملف.</p>
+        <p class="text-muted">النسخة تشمل المحتوى والأفكار والمرجعيات ونتائج الإعلانات للشركة المفتوحة. النسخة بتشمل ملفات الصور كمان. مفاتيح الربط وقواعد المنصات العامة مش ضمن الملف.</p>
         <div class="flex flex-wrap gap-2">
           <button onclick="App.exportBackup()" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold">تنزيل نسخة احتياطية</button>
           <label class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold cursor-pointer">استيراد نسخة احتياطية
@@ -537,6 +574,21 @@
           حفظ الإعدادات
         </button>
       </div>
+    </div>
+  </div>
+
+  <div id="reference-editor" role="dialog" aria-modal="true" aria-labelledby="reference-editor-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full max-h-[92dvh] overflow-y-auto p-4 sm:p-6 space-y-3">
+      <div class="flex items-center justify-between"><h3 id="reference-editor-heading" class="font-bold text-sm">معاينة وبيانات الصورة</h3><button onclick="AssetLibrary.closeEditor()" aria-label="إغلاق معاينة الصورة" class="p-2">✕</button></div>
+      <img id="reference-edit-preview" alt="معاينة الصورة المرجعية" />
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <label>اسم الصورة<input id="reference-edit-title" maxlength="160" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label>
+        <label>نوع المرجع<select id="reference-edit-kind" class="block w-full p-2 border border-borderSubtle rounded-lg"><option value="project">شغل منفّذ</option><option value="material">خامة</option><option value="design">مرجع تصميم</option><option value="logo">لوجو وهوية</option></select></label>
+        <label class="sm:col-span-2">الخامة أو المنتج المسجّل منك<input id="reference-edit-material" maxlength="200" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label>
+        <label class="sm:col-span-2">الوصف والملاحظات<textarea id="reference-edit-description" maxlength="2000" rows="3" class="block w-full p-2 border border-borderSubtle rounded-lg"></textarea></label>
+      </div>
+      <p id="reference-editor-status" role="status" aria-live="polite" class="text-xs text-muted"></p>
+      <div class="flex flex-wrap gap-2 text-xs"><button id="btn-describe-reference" onclick="AssetLibrary.describeImage()" class="px-3 py-2 rounded-lg border border-borderSubtle">وصف الصورة بالذكاء الاصطناعي</button><button onclick="AssetLibrary.saveEditor()" class="px-4 py-2 rounded-lg bg-ink text-white font-bold">حفظ البيانات</button><button onclick="AssetLibrary.closeEditor()" class="px-3 py-2 rounded-lg bg-stoneBg">إلغاء</button></div>
     </div>
   </div>
 
@@ -576,9 +628,10 @@
   <div id="toast" role="status" aria-live="polite" class="fixed bottom-5 left-5 right-5 sm:right-auto sm:max-w-lg bg-ink text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
 
   <!-- Modular Scripts -->
-  <script src="js/storage.js?v=5"></script>
-  <script src="js/ai-engine.js?v=5"></script>
-  <script charset="UTF-8" src="js/content-studio.js?v=5"></script>
+  <script src="js/storage.js?v=6"></script>
+  <script src="js/asset-library.js?v=6"></script>
+  <script src="js/ai-engine.js?v=6"></script>
+  <script charset="UTF-8" src="js/content-studio.js?v=6"></script>
   <script src="js/ads-intel.js?v=5"></script>
 
   <!-- Main Application Controller -->
@@ -629,7 +682,7 @@
       }
 
       async function switchWorkspace(companyId) {
-        if (restoring || switching || ContentStudio.isGenerating()) {
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy()) {
           document.getElementById('workspace-selector').value = currentCompanyId;
           showToast('استنى لحد ما العملية الحالية تخلص.', true);
           return;
@@ -667,6 +720,14 @@
         return currentWorkspace;
       }
 
+      function getWorkspaceCompanyId(workspace = currentWorkspace) {
+        const id = workspaceOwners.get(workspace);
+        if (!id) throw new Error('مساحة العمل غير جاهزة.');
+        return id;
+      }
+
+      function isWorkspaceBusy() { return restoring || switching; }
+
       function getPlatformRules() {
         return platformRules;
       }
@@ -681,6 +742,7 @@
           refreshUI();
           throw error;
         }
+        await StorageEngine.refreshSyncStatus(id);
         return result;
       }
 
@@ -701,45 +763,58 @@
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
 
-      function exportBackup() {
+      async function exportBackup() {
+        let acquired = false;
         try {
-          downloadJSON(StorageEngine.createBackup(getCurrentCompany(), currentWorkspace), currentCompanyId + '-backup-' + new Date().toISOString().slice(0, 10) + '.json');
-          showToast('تم تجهيز النسخة الاحتياطية للتنزيل');
-        } catch (error) { showError(error); }
+          canRestore();
+          restoring = true; acquired = true;
+          showToast('جاري تجهيز النسخة الكاملة بالصور...');
+          const backup = await StorageEngine.createPortableBackup(getCurrentCompany(), currentWorkspace);
+          downloadJSON(backup, currentCompanyId + '-backup-' + new Date().toISOString().slice(0, 10) + '.json');
+          showToast('تم تجهيز النسخة الاحتياطية الكاملة للتنزيل');
+        } catch (error) { showError(error); } finally { if (acquired) restoring = false; }
       }
 
       function canRestore() {
-        if (restoring || switching || ContentStudio.isGenerating()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
       }
 
       async function importBackup(event) {
         const file = event.target.files?.[0];
         if (!file) return;
+        let acquired = false;
         try {
           canRestore();
-          restoring = true;
+          restoring = true; acquired = true;
           const id = currentCompanyId;
-          if (file.size > 20 * 1024 * 1024) throw new Error('حجم النسخة أكبر من 20 ميجابايت.');
-          const workspace = StorageEngine.parseBackup(await file.text(), id);
+          if (file.size > 50 * 1024 * 1024) throw new Error('حجم النسخة أكبر من 50 ميجابايت.');
+          const backupText = await file.text();
+          const workspace = StorageEngine.parseBackup(backupText, id);
           if (!confirm('استبدال بيانات الشركة الحالية بالنسخة الاحتياطية؟ هتتحفظ نسخة من البيانات الحالية للاسترجاع.')) return;
           await checkpoint();
+          await StorageEngine.importBackupImages(backupText, id);
           currentWorkspace = workspace;
           workspaceOwners.set(workspace, id);
           refreshUI();
           await persistWorkspace();
-          showToast('تم استرجاع النسخة الاحتياطية وحفظها');
+          if (StorageEngine.isGitHubConfigured()) {
+            const result = await StorageEngine.retryPendingSync(id);
+            if (result.error) throw new Error('تم الاسترجاع على الجهاز. مزامنة الصور متوقفة: ' + result.error);
+          }
+          showToast('تم استرجاع النسخة الاحتياطية والصور وحفظها');
         } catch (error) { showError(error); }
-        finally { restoring = false; event.target.value = ''; }
+        finally { if (acquired) restoring = false; event.target.value = ''; }
       }
 
       async function restoreRecovery() {
+        let acquired = false;
         try {
           canRestore();
-          restoring = true;
+          restoring = true; acquired = true;
           const previous = await StorageEngine.loadRecovery(currentCompanyId);
           if (!previous) throw new Error('مفيش نسخة استرجاع للشركة دي لسه.');
           if (!confirm('استرجاع بيانات الشركة لما قبل آخر حذف أو استبدال؟')) return;
-          StorageEngine.parseBackup(JSON.stringify(StorageEngine.createBackup(getCurrentCompany(), previous)), currentCompanyId);
+          StorageEngine.validateWorkspace(previous);
           await checkpoint();
           currentWorkspace = previous;
           workspaceOwners.set(previous, currentCompanyId);
@@ -747,7 +822,7 @@
           await persistWorkspace();
           showToast('تم استرجاع البيانات');
         } catch (error) { showError(error); }
-        finally { restoring = false; }
+        finally { if (acquired) restoring = false; }
       }
 
       async function retrySync() {
@@ -784,6 +859,7 @@
         ContentStudio.renderCalendarView(currentWorkspace);
         ContentStudio.renderMemoryAndIdeasView(currentWorkspace);
         renderAssetsView();
+        AssetLibrary.render(currentWorkspace);
         AdsIntel.renderAdsView(currentWorkspace, platformRules);
         AdsIntel.renderReportsView(currentWorkspace);
       }
@@ -876,10 +952,11 @@
       }
 
       async function handleForcePull() {
+        let acquired = false;
         try {
           canRestore();
           if (!confirm('استبدال بيانات الشركة المفتوحة بنسخة GitHub؟ التعديلات المحلية غير المرفوعة هتتحفظ في نسخة الاسترجاع.')) return;
-          restoring = true;
+          restoring = true; acquired = true;
           await checkpoint();
           const pulled = await StorageEngine.forcePullFromGitHub(currentCompanyId);
           currentWorkspace = pulled.ws;
@@ -890,7 +967,7 @@
           showToast('تم استرجاع بيانات الشركة من GitHub');
         } catch (e) {
           showError(e);
-        } finally { restoring = false; }
+        } finally { if (acquired) restoring = false; }
       }
 
       function openAddCompanyModal() {
@@ -906,6 +983,7 @@
       }
 
       async function createNewCompany() {
+        canRestore();
         const name = document.getElementById('new-comp-name').value.trim();
         const code = (document.getElementById('new-comp-code').value.trim() || name.slice(0, 2)).toUpperCase();
         const identity = document.getElementById('new-comp-identity').value.trim();
@@ -946,6 +1024,8 @@
         switchWorkspace,
         getCurrentCompany,
         getCurrentWorkspace,
+        getWorkspaceCompanyId,
+        isWorkspaceBusy,
         getPlatformRules,
         persistWorkspace,
         checkpoint,
@@ -975,3 +1055,4 @@
   </script>
 </body>
 </html>
+
