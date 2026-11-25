@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * js/storage.js
- * Cloud-First Storage Engine (GitHub Private Repo as Source of Truth + IndexedDB Cache)
+ * Local-first Storage Engine with tracked GitHub synchronization
  * Supports Multi-Workspace isolation so each company has independent JSON files.
  * ============================================================================
  */
@@ -135,33 +135,52 @@ const StorageEngine = (() => {
   }
 
   async function idbGet(key) {
-    try {
-      const db = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const req = tx.objectStore(STORE_NAME).get(key);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-    } catch (e) {
-      console.warn('IDB Get Error:', e);
-      return null;
-    }
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(key);
+      tx.oncomplete = () => { db.close(); resolve(req.result); };
+      tx.onerror = tx.onabort = () => { db.close(); reject(new Error('تعذر قراءة البيانات المحلية.')); };
+    });
   }
 
-  async function idbSet(key, val) {
-    try {
-      const db = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const req = tx.objectStore(STORE_NAME).put(val, key);
-        req.onsuccess = () => resolve(true);
-        req.onerror = () => reject(req.error);
-      });
-    } catch (e) {
-      console.warn('IDB Set Error:', e);
-      return false;
+  async function idbWrite(entries) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      for (const [key, value] of entries) tx.objectStore(STORE_NAME).put(value, key);
+      tx.oncomplete = () => { db.close(); resolve(true); };
+      tx.onerror = tx.onabort = () => { db.close(); reject(new Error('تعذر الحفظ على الجهاز. نزّل نسخة احتياطية قبل إغلاق الصفحة.')); };
+    });
+  }
+
+  function idbSet(key, value) { return idbWrite([[key, value]]); }
+
+  function describeError(error) {
+    if (error?.name === 'AbortError') return 'انتهت مهلة الاتصال. حاول مرة تانية.';
+    if (error instanceof TypeError) return 'تعذر الاتصال. راجع الإنترنت وحاول مرة تانية.';
+    const message = error?.message || '';
+    if (/Gemini|Google API|All Gemini models/.test(message)) {
+      if (/429|quota|RESOURCE_EXHAUSTED/i.test(message)) return 'حصة توليد Google خلصت أو الطلبات كتير. راجع الحصة والفوترة، وجرب لاحقًا.';
+      if (/401|403|API_KEY_INVALID|API key not valid/i.test(message)) return 'مفتاح Google مش صالح أو مش مسموح له بالطلب. راجع إعدادات المفتاح.';
+      if (/404|NOT_FOUND/.test(message)) return 'موديل التوليد غير متاح للمفتاح الحالي.';
+      return 'خدمة التوليد لم تكمل الطلب. حاول مرة تانية.';
     }
+    return message || 'حصل خطأ غير متوقع. حاول مرة تانية.';
+  }
+
+  async function request(url, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try { return await fetch(url, { ...options, signal: controller.signal }); }
+    finally { clearTimeout(timer); }
+  }
+
+  function githubError(status) {
+    if ([401, 403].includes(status)) return new Error('تعذر دخول GitHub. راجع التوكن وصلاحية تعديل محتويات الريبو.');
+    if ([409, 422].includes(status)) return new Error('بيانات GitHub اتغيّرت. نزّل نسخة احتياطية، وراجع النسخة السحابية قبل الاسترجاع.');
+    if (status === 404) return new Error('الريبو أو الفرع مش متاح. راجع إعدادات GitHub.');
+    return new Error('تعذر الاتصال بـ GitHub (' + status + '). حاول مرة تانية.');
   }
 
   // --- Settings (API Keys & GitHub Config) ---
@@ -206,66 +225,31 @@ const StorageEngine = (() => {
     return new TextDecoder().decode(bytes);
   }
 
-  async function ghReadFile(path) {
-    const cfg = getConfig();
-    if (!isGitHubConfigured()) return null;
+  function configSource(cfg) { return [cfg.ghOwner, cfg.ghRepo, cfg.ghBranch || 'main'].join('/'); }
 
-    const url = `https://api.github.com/repos/${cfg.ghOwner}/${cfg.ghRepo}/contents/${path}?ref=${cfg.ghBranch || 'main'}`;
-    const res = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${cfg.ghToken}`,
-        'Accept': 'application/vnd.github+json'
-      }
-    });
-
-    if (res.status === 404) return { exists: false, data: null, sha: null };
-    if (!res.ok) throw new Error(`GitHub Read Error (${res.status})`);
-
+  async function ghReadFile(path, cfg = getConfig()) {
+    const url = `https://api.github.com/repos/${encodeURIComponent(cfg.ghOwner)}/${encodeURIComponent(cfg.ghRepo)}/contents/${path}?ref=${encodeURIComponent(cfg.ghBranch || 'main')}`;
+    const headers = { Authorization: `Bearer ${cfg.ghToken}`, Accept: 'application/vnd.github+json' };
+    const res = await request(url, { headers });
+    if (res.status === 404) {
+      const branch = await request(`https://api.github.com/repos/${encodeURIComponent(cfg.ghOwner)}/${encodeURIComponent(cfg.ghRepo)}/branches/${encodeURIComponent(cfg.ghBranch || 'main')}`, { headers });
+      if (!branch.ok) throw githubError(branch.status);
+      return { exists: false, data: null, sha: null };
+    }
+    if (!res.ok) throw githubError(res.status);
     const json = await res.json();
-    const content = fromBase64Unicode(json.content);
-    return {
-      exists: true,
-      data: JSON.parse(content),
-      sha: json.sha
-    };
+    try { return { exists: true, data: JSON.parse(fromBase64Unicode(json.content)), sha: json.sha }; }
+    catch { throw new Error('ملف البيانات على GitHub غير صالح. نسختك المحلية محفوظة.'); }
   }
 
-  async function ghWriteFile(path, dataObj, commitMsg = 'Update studio data') {
-    const cfg = getConfig();
-    if (!isGitHubConfigured()) return false;
-
-    // Fetch latest SHA first to prevent conflict
-    let sha = null;
-    try {
-      const existing = await ghReadFile(path);
-      if (existing && existing.exists) sha = existing.sha;
-    } catch (e) {
-      console.warn('SHA check warning:', e);
-    }
-
-    const url = `https://api.github.com/repos/${cfg.ghOwner}/${cfg.ghRepo}/contents/${path}`;
-    const body = {
-      message: commitMsg,
-      content: toBase64Unicode(JSON.stringify(dataObj, null, 2)),
-      branch: cfg.ghBranch || 'main'
-    };
+  async function ghWriteFile(path, data, sha, cfg) {
+    const body = { message: 'Sync studio data', content: toBase64Unicode(JSON.stringify(data, null, 2)), branch: cfg.ghBranch || 'main' };
     if (sha) body.sha = sha;
-
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${cfg.ghToken}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
+    const res = await request(`https://api.github.com/repos/${encodeURIComponent(cfg.ghOwner)}/${encodeURIComponent(cfg.ghRepo)}/contents/${path}`, {
+      method: 'PUT', headers: { Authorization: `Bearer ${cfg.ghToken}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`GitHub Write Error (${res.status}): ${errText}`);
-    }
-    return true;
+    if (!res.ok) throw githubError(res.status);
+    return (await res.json()).content.sha;
   }
 
   // --- High-Level Workspace Operations ---
@@ -287,144 +271,162 @@ const StorageEngine = (() => {
     label.textContent = text;
   }
 
-  async function loadCompaniesList() {
-    // Try GitHub first if configured
-    if (isGitHubConfigured()) {
-      try {
-        updateSyncBadge('syncing', 'جاري الجلب من GitHub...');
-        const remote = await ghReadFile('data/companies.json');
-        if (remote && remote.exists && Array.isArray(remote.data)) {
-          await idbSet('companies', remote.data);
-          updateSyncBadge('synced', 'متزامن مع GitHub');
-          return remote.data;
-        } else {
-          // Initialize on GitHub
-          await ghWriteFile('data/companies.json', DEFAULT_COMPANIES, 'Init companies list');
-          await idbSet('companies', DEFAULT_COMPANIES);
-          updateSyncBadge('synced', 'متزامن مع GitHub');
-          return DEFAULT_COMPANIES;
-        }
-      } catch (e) {
-        console.error(e);
-        updateSyncBadge('error', 'خطأ في GitHub (يعمل من الكاش)');
-      }
-    }
+  const queues = new Map();
+  const localQueues = new Map();
+  function enqueueIn(map, key, operation) {
+    const next = (map.get(key) || Promise.resolve()).catch(() => {}).then(operation);
+    map.set(key, next);
+    return next;
+  }
+  const enqueue = (key, operation) => enqueueIn(queues, key, operation);
+  const enqueueLocal = (key, operation) => enqueueIn(localQueues, key, operation);
+  const clone = value => JSON.parse(JSON.stringify(value));
 
-    const cached = await idbGet('companies');
-    if (cached && Array.isArray(cached) && cached.length > 0) {
-      updateSyncBadge('local', 'كاش محلي (اربط GitHub للحفظ السحابي)');
+  async function syncRecord(key, path, data, meta) {
+    if (!isGitHubConfigured()) {
+      updateSyncBadge('local', 'محفوظ على الجهاز');
+      return { local: true, synced: false };
+    }
+    const cfg = getConfig();
+    try {
+      updateSyncBadge('syncing', 'جاري المزامنة...');
+      let sha = meta.remoteSha;
+      if (!meta.knownRemote || meta.source !== configSource(cfg)) {
+        const remote = await ghReadFile(path, cfg);
+        if (remote.exists && JSON.stringify(remote.data) !== meta.baseline && JSON.stringify(remote.data) !== JSON.stringify(data)) throw githubError(409);
+        sha = remote.sha;
+      }
+      // Write against the version actually loaded; never silently adopt a newer SHA.
+      const remoteSha = await ghWriteFile(path, data, sha, cfg);
+      const dirty = await enqueueLocal(key, async () => {
+        const latest = await idbGet('sync_' + key);
+        const dirty = latest?.revision !== meta.revision;
+        await idbSet('sync_' + key, { ...(latest || {}), dirty, knownRemote: true, remoteSha, source: configSource(cfg) });
+        return dirty;
+      });
+      updateSyncBadge(dirty ? 'local' : 'synced', dirty ? 'تعديلات على الجهاز في انتظار المزامنة' : 'متزامن مع GitHub');
+      return { local: true, synced: !dirty };
+    } catch (error) {
+      updateSyncBadge('error', 'محفوظ على الجهاز — المزامنة متوقفة');
+      return { local: true, synced: false, error: describeError(error) };
+    }
+  }
+
+  function saveRecord(key, path, value) {
+    const data = clone(value);
+    // Local commits never wait for a slow cloud request.
+    return enqueueLocal(key, async () => {
+      const previous = await idbGet(key);
+      const oldMeta = await idbGet('sync_' + key);
+      const meta = { ...(oldMeta || {}), dirty: true, revision: (oldMeta?.revision || 0) + 1 };
+      if (!oldMeta?.dirty) meta.baseline = JSON.stringify(previous);
+      await idbWrite([[key, data], ['sync_' + key, meta]]);
+    }).then(() => retryRecord(key, path));
+  }
+
+  async function loadRecord(key, path, fallback, validate) {
+    await localQueues.get(key)?.catch(() => {});
+    await queues.get(key)?.catch(() => {});
+    const cached = await idbGet(key);
+    const meta = await idbGet('sync_' + key);
+    if (cached && meta?.dirty) {
+      updateSyncBadge('local', 'تعديلات على الجهاز في انتظار المزامنة');
       return cached;
     }
-
-    await idbSet('companies', DEFAULT_COMPANIES);
-    updateSyncBadge('local', 'كاش محلي');
-    return DEFAULT_COMPANIES;
-  }
-
-  async function saveCompaniesList(list) {
-    await idbSet('companies', list);
     if (isGitHubConfigured()) {
       try {
-        updateSyncBadge('syncing', 'جاري الحفظ على GitHub...');
-        await ghWriteFile('data/companies.json', list, 'Update companies');
-        updateSyncBadge('synced', 'متزامن مع GitHub');
-      } catch (e) {
-        console.error(e);
-        updateSyncBadge('error', 'تعذر المزامنة مع GitHub');
-      }
-    }
-  }
-
-  async function loadWorkspace(companyId) {
-    const path = `data/workspaces/${companyId}.json`;
-    if (isGitHubConfigured()) {
-      try {
-        updateSyncBadge('syncing', 'تحميل بيانات الشركة...');
-        const remote = await ghReadFile(path);
-        if (remote && remote.exists && remote.data) {
-          await idbSet(`ws_${companyId}`, remote.data);
+        updateSyncBadge('syncing', 'تحميل البيانات...');
+        const cfg = getConfig();
+        const remote = await ghReadFile(path, cfg);
+        if (remote.exists) {
+          validate(remote.data);
+          await idbWrite([[key, remote.data], ['sync_' + key, { dirty: false, knownRemote: true, remoteSha: remote.sha, source: configSource(cfg) }]]);
           updateSyncBadge('synced', 'متزامن مع GitHub');
           return remote.data;
-        } else {
-          const seed = companyId === 'nassar-stone'
-            ? JSON.parse(JSON.stringify(DEFAULT_NASSAR_WORKSPACE))
-            : createEmptyWorkspace(companyId);
-          await ghWriteFile(path, seed, `Init workspace ${companyId}`);
-          await idbSet(`ws_${companyId}`, seed);
-          updateSyncBadge('synced', 'متزامن مع GitHub');
-          return seed;
         }
-      } catch (e) {
-        console.error(e);
-        updateSyncBadge('error', 'خطأ اتصال GitHub (نسخة الكاش)');
+        const data = cached || clone(fallback);
+        await idbWrite([[key, data], ['sync_' + key, { dirty: true, knownRemote: true, remoteSha: null, source: configSource(cfg) }]]);
+        await retryRecord(key, path);
+        return data;
+      } catch (error) {
+        updateSyncBadge('error', 'تعذر الجلب — باستخدام نسخة الجهاز');
       }
     }
-
-    const cached = await idbGet(`ws_${companyId}`);
-    if (cached) {
-      updateSyncBadge('local', 'كاش محلي');
-      return cached;
-    }
-
-    const fallback = companyId === 'nassar-stone'
-      ? JSON.parse(JSON.stringify(DEFAULT_NASSAR_WORKSPACE))
-      : createEmptyWorkspace(companyId);
-    await idbSet(`ws_${companyId}`, fallback);
-    return fallback;
-  }
-
-  async function saveWorkspace(companyId, wsData) {
-    await idbSet(`ws_${companyId}`, wsData);
-    if (isGitHubConfigured()) {
-      try {
-        updateSyncBadge('syncing', 'حفظ تلقائي على GitHub...');
-        await ghWriteFile(`data/workspaces/${companyId}.json`, wsData, `Sync ${companyId}`);
-        updateSyncBadge('synced', 'متزامن مع GitHub');
-      } catch (e) {
-        console.error(e);
-        updateSyncBadge('error', 'فشل الحفظ السحابي');
-      }
-    } else {
-      updateSyncBadge('local', 'محفوظ محلياً');
-    }
-  }
-
-  async function loadPlatformRules() {
-    const path = 'data/platform_rules.json';
-    if (isGitHubConfigured()) {
-      try {
-        const remote = await ghReadFile(path);
-        if (remote && remote.exists && remote.data) {
-          await idbSet('platform_rules', remote.data);
-          return remote.data;
-        } else {
-          await ghWriteFile(path, DEFAULT_PLATFORM_RULES, 'Init platform rules');
-          await idbSet('platform_rules', DEFAULT_PLATFORM_RULES);
-          return DEFAULT_PLATFORM_RULES;
-        }
-      } catch (e) {
-        console.warn('Platform rules remote read failed:', e);
-      }
-    }
-    const cached = await idbGet('platform_rules');
     if (cached) return cached;
-    await idbSet('platform_rules', DEFAULT_PLATFORM_RULES);
-    return DEFAULT_PLATFORM_RULES;
+    const data = clone(fallback);
+    await idbSet(key, data);
+    updateSyncBadge('local', 'محفوظ على الجهاز');
+    return data;
   }
 
-  async function savePlatformRules(rulesObj) {
-    await idbSet('platform_rules', rulesObj);
-    if (isGitHubConfigured()) {
-      try {
-        updateSyncBadge('syncing', 'حفظ قواعد المنصات...');
-        await ghWriteFile('data/platform_rules.json', rulesObj, 'Update Meta & Google rules');
-        updateSyncBadge('synced', 'متزامن مع GitHub');
-      } catch (e) {
-        console.error(e);
-        updateSyncBadge('error', 'فشل حفظ القواعد سحابياً');
-      }
-    }
+  function retryRecord(key, path) {
+    return enqueue(key, async () => {
+      const meta = await idbGet('sync_' + key);
+      if (!meta?.dirty) return { local: true, synced: isGitHubConfigured() };
+      return syncRecord(key, path, await idbGet(key), meta);
+    });
   }
+
+  function validateCompanies(data) {
+    if (!Array.isArray(data) || !data.length || data.some(c => !c || typeof c.id !== 'string' || typeof c.name !== 'string')) throw new Error('قائمة الشركات غير صالحة.');
+  }
+  function validateRules(data) {
+    if (!data || !Array.isArray(data.rules) || data.rules.some(r => typeof r !== 'string')) throw new Error('قواعد المنصات غير صالحة.');
+  }
+  function validateWorkspace(ws) {
+    const object = value => value && typeof value === 'object' && !Array.isArray(value);
+    const objects = value => Array.isArray(value) && value.every(object);
+    const strings = value => Array.isArray(value) && value.every(v => typeof v === 'string');
+    if (!object(ws) || !object(ws.brandCore) || !object(ws.goal)
+      || !['identity', 'tone', 'segments'].every(k => typeof ws.brandCore[k] === 'string')
+      || !strings(ws.brandCore.rules) || !strings(ws.brandCore.materials) || !objects(ws.brandCore.offers)
+      || !objects(ws.ideas) || ws.ideas.some(i => typeof i.title !== 'string')
+      || !objects(ws.calendar) || ws.calendar.some(p => typeof p.title !== 'string')
+      || !object(ws.assets) || !objects(ws.assets.delivered) || !objects(ws.assets.designerDeliveries)
+      || !object(ws.ads) || !objects(ws.ads.dailyLogs) || !objects(ws.ads.offlineSales) || !objects(ws.seasons)
+      || ws.ads.dailyLogs.some(log => (log.rows !== undefined && !objects(log.rows))
+        || (log.diagnosis && (!object(log.diagnosis) || (log.diagnosis.campaigns !== undefined && !objects(log.diagnosis.campaigns)))))) {
+      throw new Error('بيانات مساحة العمل ناقصة أو غير صالحة. لم يتم تغيير بياناتك.');
+    }
+    return ws;
+  }
+
+  function loadCompaniesList() { return loadRecord('companies', 'data/companies.json', DEFAULT_COMPANIES, validateCompanies); }
+  function saveCompaniesList(list) { validateCompanies(list); return saveRecord('companies', 'data/companies.json', list); }
+  function loadWorkspace(id) {
+    return loadRecord('ws_' + id, `data/workspaces/${id}.json`, id === 'nassar-stone' ? DEFAULT_NASSAR_WORKSPACE : createEmptyWorkspace(id), validateWorkspace);
+  }
+  function saveWorkspace(id, ws) { validateWorkspace(ws); return saveRecord('ws_' + id, `data/workspaces/${id}.json`, ws); }
+  function loadPlatformRules() { return loadRecord('platform_rules', 'data/platform_rules.json', DEFAULT_PLATFORM_RULES, validateRules); }
+  function savePlatformRules(rules) { validateRules(rules); return saveRecord('platform_rules', 'data/platform_rules.json', rules); }
+
+  async function refreshSyncStatus(id) {
+    const metas = await Promise.all(['companies', 'ws_' + id, 'platform_rules'].map(key => idbGet('sync_' + key)));
+    if (metas.some(meta => meta?.dirty)) updateSyncBadge('local', 'تعديلات على الجهاز في انتظار المزامنة');
+    else if (!isGitHubConfigured()) updateSyncBadge('local', 'محفوظ على الجهاز');
+  }
+
+  async function retryPendingSync(id) {
+    const results = [];
+    for (const [key, path] of [['companies', 'data/companies.json'], ['ws_' + id, `data/workspaces/${id}.json`], ['platform_rules', 'data/platform_rules.json']]) results.push(await retryRecord(key, path));
+    const failed = results.find(r => r.error);
+    if (failed) updateSyncBadge('error', 'محفوظ على الجهاز — المزامنة متوقفة');
+    return failed || { local: true, synced: isGitHubConfigured() };
+  }
+
+  function createBackup(company, workspace) {
+    validateWorkspace(workspace);
+    return { format: 'nassar-studio-workspace', version: 1, exportedAt: new Date().toISOString(), company: { id: company.id, name: company.name }, workspace: clone(workspace) };
+  }
+  function parseBackup(text, companyId) {
+    let backup;
+    try { backup = JSON.parse(text); } catch { throw new Error('الملف مش JSON صالح. اختار نسخة احتياطية من التطبيق.'); }
+    if (backup?.format !== 'nassar-studio-workspace' || backup.version !== 1 || backup.company?.id !== companyId) throw new Error('النسخة مش مدعومة أو تخص شركة تانية. افتح الشركة الصحيحة الأول.');
+    validateWorkspace(backup.workspace);
+    return clone(backup.workspace);
+  }
+  function saveRecovery(id, workspace) { return idbSet('recovery_' + id, clone(workspace)); }
+  function loadRecovery(id) { return idbGet('recovery_' + id); }
 
   function createEmptyWorkspace(name) {
     return {
@@ -453,13 +455,27 @@ const StorageEngine = (() => {
     if (!isGitHubConfigured()) {
       throw new Error('يرجى إدخال بيانات مستودع GitHub والتوكن في الإعدادات أولاً.');
     }
-    const companies = await loadCompaniesList();
-    const ws = await loadWorkspace(companyId);
-    const rules = await loadPlatformRules();
-    return { companies, ws, rules };
+    await Promise.allSettled([...localQueues.values(), ...queues.values()]);
+    const cfg = getConfig();
+    const remote = await ghReadFile(`data/workspaces/${companyId}.json`, cfg);
+    if (!remote.exists) throw new Error('مفيش نسخة للشركة دي على GitHub. بياناتك المحلية لم تتغير.');
+    validateWorkspace(remote.data);
+    const previous = await idbGet('ws_' + companyId);
+    const entries = [['ws_' + companyId, remote.data], ['sync_ws_' + companyId, { dirty: false, knownRemote: true, remoteSha: remote.sha, source: configSource(cfg) }]];
+    if (previous) entries.push(['recovery_' + companyId, previous]);
+    await idbWrite(entries);
+    updateSyncBadge('synced', 'تم استرجاع نسخة GitHub');
+    return { ws: remote.data };
   }
 
   return {
+    describeError,
+    createBackup,
+    parseBackup,
+    saveRecovery,
+    loadRecovery,
+    retryPendingSync,
+    refreshSyncStatus,
     getConfig,
     saveConfig,
     isGitHubConfigured,
