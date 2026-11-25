@@ -1,7 +1,7 @@
 // Dependency-free regression tests. Run: node tests/phase1.test.cjs
 const fs = require('node:fs');
 const path = require('node:path');
-const sources = Object.fromEntries(['index.html','js/storage.js','js/content-studio.js','js/ads-intel.js','js/material-catalog.js','js/content-memory.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
+const sources = Object.fromEntries(['index.html','js/storage.js','js/content-studio.js','js/ads-intel.js','js/material-catalog.js','js/content-memory.js','js/post-workshop.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
 
 const assert = (condition, message = 'Assertion failed') => { if (!condition) throw new Error(message); };
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -91,7 +91,7 @@ function harness() {
   };
   const evaluate = (code, result) => { const keys=Object.keys(scope).filter(key => key !== result); return new Function(...keys,code+'\nreturn '+result+';')(...keys.map(key=>scope[key])); };
   const storage=evaluate(sources['js/storage.js'],'StorageEngine');
-  const api = { exclusionLabel:idea=>({rejected:'مرفوض',saturated:'متشبع'}[idea.status]||''),
+  const api = { reviewPost:async()=>({summary:'مراجعة تجريبية',issues:[]}), exclusionLabel:idea=>({rejected:'مرفوض',saturated:'متشبع'}[idea.status]||''),
     matchesIdea:(idea,post)=>idea.id===post.ideaId || idea.title===(post.ideaTitle||post.title) };
   let app,studio,ads;
   const boot = async () => {
@@ -99,8 +99,10 @@ function harness() {
     Object.assign(scope,{StorageEngine:storage,App:appProxy,AIEngine:api,AssetLibrary:{isBusy:()=>false,render(){},renderPostReferences(){},prepareReferences:async()=>[]}});
     scope.ContentStudio = {};
     scope.ContentMemory = {};
+    scope.PostWorkshop = {};
     scope.MaterialCatalog=evaluate(sources['js/material-catalog.js'],'MaterialCatalog');
     Object.assign(scope.ContentMemory, evaluate(sources['js/content-memory.js'],'ContentMemory'));
+    Object.assign(scope.PostWorkshop, evaluate(sources['js/post-workshop.js'],'PostWorkshop'));
     studio=evaluate(sources['js/content-studio.js'],'ContentStudio');
     Object.assign(scope.ContentStudio, studio);
     ads=evaluate(sources['js/ads-intel.js'],'AdsIntel');
@@ -228,4 +230,5 @@ if (require.main === module) runTests().then(results => console.log(results.leng
 
 
 module.exports = { harness, runTests, sources, assert };
+
 

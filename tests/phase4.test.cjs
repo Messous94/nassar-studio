@@ -19,7 +19,7 @@ test('Approval preserves saturation; publication increments exactly once and edi
 
 test('Approval of a new angle creates zero saturation instead of an approval increment',async()=>{
  const h=await setup();h.ws.calendar=[{title:'بوست',ideaTitle:'زاوية جديدة',status:'مسودة'}];
- await h.studio.setPostStatus(0,'معتمد');const idea=h.ws.ideas.find(item=>item.title==='زاوية جديدة');assert(idea&&idea.saturation===0&&idea.status==='approved');
+ await h.studio.setPostStatus(0,'معتمد');if(h.ws.calendar[0].status!=='معتمد')await h.scope.PostWorkshop.approveWithNotes();const idea=h.ws.ideas.find(item=>item.title==='زاوية جديدة');assert(idea&&idea.saturation===0&&idea.status==='approved');
  await h.studio.setPostStatus(0,'معتمد');assert(idea.saturation===0);
 });
 
@@ -155,3 +155,4 @@ test('Large GitHub workspace files use authenticated raw content instead of empt
 });
 
 (async()=>{for(const {name,run}of tests){await run();console.log('PASS '+name);}console.log(tests.length+' phase 4 tests passed');})().catch(error=>{console.error(error);process.exitCode=1;});
+

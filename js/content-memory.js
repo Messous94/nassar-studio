@@ -111,13 +111,13 @@ const ContentMemory = (() => {
   function isDuplicate(workspace, items) {
     return items.some(item => active(workspace).some(entry => (normalize(item.title) && normalize(item.title) === normalize(entry.title)) || (normalize(item.copy) && normalize(item.copy) === normalize(entry.copy))));
   }
-  function idle() { if (busy || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentStudio.isGenerating() || App.isWorkspaceBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.'); }
+  function idle() { if (busy || PostWorkshop.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentStudio.isGenerating() || App.isWorkspaceBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.'); }
   function refresh() { signature = ''; App.refreshUI(); }
   const show = id => { const modal = document.getElementById(id); modal.classList.remove('hidden'); modal.classList.add('flex'); };
   const hide = id => { const modal = document.getElementById(id); modal.classList.add('hidden'); modal.classList.remove('flex'); };
   function openPublish(index = null, publicationId = '') {
     try {
-      idle(); const workspace = App.getCurrentWorkspace(); ensure(workspace);
+      idle(); PostWorkshop.requireSavedCopy(); const workspace = App.getCurrentWorkspace(); ensure(workspace);
       const post = index === null ? null : workspace.calendar[index];
       if (index !== null && !post) throw new Error('البوست مش موجود.');
       const original = publicationId ? workspace.publicationHistory.find(item => item.id === publicationId) : post ? activeForPost(workspace, post.id) : null;
@@ -193,3 +193,4 @@ const ContentMemory = (() => {
   }
   return {isBusy,today,ensure,recalculate,activeForPost,hasIdeaHistory,registerPublication,voidPublication,setSaturation,applyExclusion,allowIdea,historyContext,isDuplicate,openPublish,closePublish,togglePublishedImage,savePublication,cancelPublication,openExclusion,closeExclusion,saveExclusion,openSaturation,closeSaturation,saveSaturation,reopenIdea,render,refresh};
 })();
+
