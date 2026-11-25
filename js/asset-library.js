@@ -11,7 +11,7 @@ const AssetLibrary = (() => {
   const isBusy = () => busy;
   const companyId = ws => App.getWorkspaceCompanyId(ws);
   function ensureIdle() {
-    if (busy || ContentMemory.isBusy() || MaterialCatalog.isBusy() || ContentStudio.isGenerating() || App.isWorkspaceBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
+    if (busy || PostWorkshop.isBusy() || ContentMemory.isBusy() || MaterialCatalog.isBusy() || ContentStudio.isGenerating() || App.isWorkspaceBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
   }
   function getImage(owner, id) {
     const key = owner + ':' + id;
@@ -246,4 +246,5 @@ const AssetLibrary = (() => {
   }
   return { isBusy, render, refresh, prepareReferences, toggleSelection, clearSelection, compressImage, upload, openEditor, closeEditor, saveEditor, describeImage, removeReference, renderPostReferences };
 })();
+
 

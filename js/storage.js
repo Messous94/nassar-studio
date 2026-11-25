@@ -417,6 +417,27 @@ const StorageEngine = (() => {
     return entry;
   }
 
+  const REVIEW_CATEGORIES = ['structure', 'dialect', 'rules', 'material', 'claims', 'similarity', 'review'];
+  function validatePostReview(review) {
+    if (!review || review.version !== 1 || typeof review.stamp !== 'string' || review.stamp.length > 100
+      || typeof review.reviewedAt !== 'string' || !Number.isFinite(Date.parse(review.reviewedAt))
+      || !['complete', 'unavailable'].includes(review.semanticStatus) || typeof review.summary !== 'string' || review.summary.length > 2000
+      || !Array.isArray(review.issues) || review.issues.length > 80) throw new Error('بيانات مراجعة البوست غير صالحة.');
+    for (const issue of review.issues) {
+      if (!issue || !REVIEW_CATEGORIES.includes(issue.category) || !['error', 'warning', 'info'].includes(issue.severity)
+        || !['local', 'model'].includes(issue.source) || typeof issue.message !== 'string' || !issue.message.trim() || issue.message.length > 1500
+        || typeof issue.evidence !== 'string' || issue.evidence.length > 500 || typeof issue.suggestion !== 'string' || issue.suggestion.length > 1500) throw new Error('ملاحظة مراجعة البوست غير صالحة.');
+    }
+    return review;
+  }
+  function validatePostRevision(revision) {
+    if (!revision || !/^rev-[a-z0-9-]{4,80}$/.test(revision.id) || typeof revision.createdAt !== 'string' || !Number.isFinite(Date.parse(revision.createdAt))
+      || !['manual-copy', 'regenerate-hook', 'regenerate-copy', 'regenerate-visual', 'regenerate-brief', 'restore'].includes(revision.action)
+      || typeof revision.originalStatus !== 'string' || revision.originalStatus.length > 40 || !revision.fields) throw new Error('نسخة البوست غير صالحة.');
+    for (const [field, limit] of [['copy', 50000], ['visualDirection', 12000], ['designerBrief', 12000]]) if (typeof revision.fields[field] !== 'string' || revision.fields[field].length > limit) throw new Error('نص نسخة البوست غير صالح أو طويل زيادة.');
+    return revision;
+  }
+
   function validateWorkspace(ws) {
     const object = value => value && typeof value === 'object' && !Array.isArray(value);
     const objects = value => Array.isArray(value) && value.every(object);
@@ -468,6 +489,14 @@ const StorageEngine = (() => {
       if (idea.exclusionReason !== undefined && (typeof idea.exclusionReason !== 'string' || idea.exclusionReason.length > 2000)) throw new Error('سبب الاستبعاد غير صالح.');
       if (idea.saturationAdjustments !== undefined && (!Array.isArray(idea.saturationAdjustments) || idea.saturationAdjustments.some(item => !item || !Number.isInteger(item.value) || item.value < 0 || item.value > 100 || !Number.isInteger(item.before) || item.before < 0 || item.before > 100 || typeof item.reason !== 'string' || item.reason.length > 500 || typeof item.at !== 'string'))) throw new Error('سجل تعديل التشبع غير صالح.');
       if (idea.exclusionHistory !== undefined && (!Array.isArray(idea.exclusionHistory) || idea.exclusionHistory.some(item => !item || !['rejected', 'saturated'].includes(item.status) || typeof item.reason !== 'string' || !item.reason.trim() || item.reason.length > 2000 || typeof item.at !== 'string'))) throw new Error('سجل أسباب الاستبعاد غير صالح.');
+    }
+    for (const post of ws.calendar) {
+      if (post.reviewResult !== undefined) validatePostReview(post.reviewResult);
+      if (post.revisions !== undefined) {
+        if (!Array.isArray(post.revisions)) throw new Error('سجل نسخ البوست غير صالح.');
+        const ids = post.revisions.map(revision => validatePostRevision(revision).id);
+        if (new Set(ids).size !== ids.length) throw new Error('في معرّفات نسخ بوست مكررة.');
+      }
     }
     referenceDescriptors(ws);
     return ws;
@@ -684,6 +713,8 @@ const StorageEngine = (() => {
 
   return {
     MAX_REFERENCE_BYTES,
+    validatePostReview,
+    validatePostRevision,
     validatePublication,
     validateMaterialRecord,
     validateWorkspace,
@@ -716,4 +747,5 @@ const StorageEngine = (() => {
     forcePullFromGitHub
   };
 })();
+
 

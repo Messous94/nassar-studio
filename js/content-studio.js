@@ -42,7 +42,7 @@ const ContentStudio = (() => {
 
     const tbody = document.getElementById('posts-table-body');
     const posts = ws.calendar || [];
-    if (!posts.length) { AssetLibrary.renderPostReferences(null, ws); MaterialCatalog.renderPost(null); }
+    if (!posts.length) { AssetLibrary.renderPostReferences(null, ws); MaterialCatalog.renderPost(null); PostWorkshop.renderCopy(null); PostWorkshop.render(ws, null); }
     if (!tbody) return;
 
     if (posts.length === 0) {
@@ -76,7 +76,8 @@ const ContentStudio = (() => {
       panel.classList.remove('opacity-40', 'pointer-events-none');
       document.getElementById('brief-badge').textContent = `بوست #${String(selectedPostIndex + 1).padStart(2, '0')} • ${post.segment || 'B2C'}`;
       document.getElementById('brief-title').textContent = post.title || '';
-      document.getElementById('brief-copy').value = post.copy || '';
+      PostWorkshop.renderCopy(post);
+      PostWorkshop.render(ws, post);
       document.getElementById('brief-publication-note').textContent = ContentMemory.activeForPost(ws, post.id) ? 'تعديل النص في الكاليندر ما يغيّرش النسخة المسجّلة في سجل المنشور.' : '';
       document.getElementById('brief-exclusion-reason').textContent = post.exclusionReason ? 'آخر سبب استبعاد مسجّل: ' + post.exclusionReason : '';
       document.getElementById('brief-material').textContent = post.material || '-';
@@ -91,10 +92,11 @@ const ContentStudio = (() => {
     }
   }
 
-  function selectPost(idx) { selectedPostIndex = idx; App.refreshUI(); }
+  function getSelectedPost() { return App.getCurrentWorkspace()?.calendar?.[selectedPostIndex] || null; }
+  function selectPost(idx) { if (generating || PostWorkshop.isBusy() || !PostWorkshop.canLeave()) return; selectedPostIndex = idx; App.refreshUI(); }
 
-  async function setPostStatus(idx, next) {
-    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+  async function setPostStatus(idx, next, options = {}) {
+    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const ws = App.getCurrentWorkspace();
     ContentMemory.ensure(ws);
     const post = ws.calendar[idx];
@@ -105,6 +107,12 @@ const ContentStudio = (() => {
     if (excludedStatus) { App.refreshUI(); ContentMemory.openExclusion('post', idx, excludedStatus); return; }
     let match = ws.ideas.find(idea => AIEngine.matchesIdea(idea, post));
     if (next === 'معتمد') {
+      if (options.confirmedStamp) {
+        if (!PostWorkshop.approvalConfirmed(ws, post, options.confirmedStamp)) { App.showError(new Error('المراجعة قديمة. أعد المراجعة قبل الاعتماد.')); return; }
+      } else {
+        App.refreshUI();
+        if (!await PostWorkshop.requestApproval(ws, post)) return;
+      }
       if (match && !AIEngine.exclusionLabel(match)) match.status = 'approved';
       else if (!match && post.ideaTitle) {
         match = { id: 'idea-' + crypto.randomUUID(), title: post.ideaTitle, insight: post.title, segment: post.segment || 'B2C', saturation: 0, saturationBase: 0, status: 'approved' };
@@ -131,22 +139,20 @@ const ContentStudio = (() => {
   }
 
   async function saveEditedCopy() {
-    const ws = App.getCurrentWorkspace();
-    const post = ws.calendar[selectedPostIndex];
+    const ws = App.getCurrentWorkspace(), post = getSelectedPost();
     if (!post) return;
-    post.copy = document.getElementById('brief-copy').value;
-    await App.persistWorkspace();
-    App.showToast('تم حفظ تعديل النص');
+    await PostWorkshop.saveManualCopy(ws, post, document.getElementById('brief-copy').value);
   }
 
   async function handleGenerateCalendar() {
-    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-calendar');
     const orig = btn.innerHTML;
     const mode = document.getElementById('calendar-generation-mode').value;
     const workspace = App.getCurrentWorkspace();
     if (mode === 'replace' && workspace.calendar.length && !confirm('استبدال الكاليندر الحالية بعد نجاح التوليد؟ هتتحفظ نسخة للاسترجاع.')) return;
     try {
+      PostWorkshop.requireSavedCopy();
       generating = true;
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner ml-1.5"></span> جاري التوليد...`;
@@ -154,6 +160,7 @@ const ContentStudio = (() => {
       const references = await AssetLibrary.prepareReferences(ws);
       const posts = await AIEngine.generateCalendar8(ws, references);
       if (!Array.isArray(posts) || posts.length !== 8 || posts.some(p => !p || typeof p.title !== 'string')) throw new Error('رد التوليد غير مكتمل. الكاليندر الحالية لم تتغير.');
+      PostWorkshop.requireSavedCopy();
       const generated = posts.map(p => ({ ...p, id: 'post-' + crypto.randomUUID(), status: 'مسودة', saturationCounted: false, referenceImage: '' }));
       await App.checkpoint(ws);
       selectedPostIndex = mode === 'replace' ? 0 : ws.calendar.length;
@@ -166,18 +173,20 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateSinglePost() {
-    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-single');
     const orig = btn.innerHTML;
     const noteEl = document.getElementById('single-post-note');
     const note = noteEl ? noteEl.value.trim() : '';
     try {
+      PostWorkshop.requireSavedCopy();
       generating = true;
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner spinner-dark ml-1.5"></span> جاري التوليد...`;
       const ws = App.getCurrentWorkspace();
       const references = await AssetLibrary.prepareReferences(ws);
       const post = await AIEngine.generateSinglePost(ws, note, references);
+      PostWorkshop.requireSavedCopy();
       ws.calendar.unshift({ ...post, id: 'post-' + crypto.randomUUID(), status: 'مسودة', saturationCounted: false, referenceImage: '' });
       if (noteEl) noteEl.value = '';
       selectedPostIndex = 0;
@@ -189,7 +198,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateRefImage() {
-    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const ws = App.getCurrentWorkspace();
     const post = ws.calendar[selectedPostIndex];
     if (!post) return;
@@ -261,7 +270,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateIdeas() {
-    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-ideas');
     const orig = btn.innerHTML;
     try {
@@ -286,7 +295,8 @@ const ContentStudio = (() => {
   async function saveBrandCore() { const ws = App.getCurrentWorkspace(); ws.brandCore.identity = document.getElementById('core-identity').value.trim(); ws.brandCore.tone = document.getElementById('core-tone').value.trim(); ws.brandCore.segments = document.getElementById('core-segments').value.trim(); ws.brandCore.materials = document.getElementById('core-materials').value.split(',').map(s => s.trim()).filter(Boolean); await App.persistWorkspace(); App.showToast('تم حفظ الهوية'); }
   async function saveGoal() { const ws = App.getCurrentWorkspace(); ws.goal.objective = document.getElementById('goal-objective-input').value.trim(); await App.persistWorkspace(); App.showToast('تم حفظ الهدف'); }
 
-  return { isGenerating, renderCalendarView, renderMemoryAndIdeasView, selectPost, setPostStatus, excludeIdea, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
+  return { getSelectedPost, isGenerating, renderCalendarView, renderMemoryAndIdeasView, selectPost, setPostStatus, excludeIdea, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
 })();
+
 
 

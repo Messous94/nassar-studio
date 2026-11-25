@@ -207,7 +207,13 @@
               <label class="text-[11px] font-bold text-muted">النص النهائي للنشر (قابل للتعديل)</label>
               <button onclick="ContentStudio.saveEditedCopy()" class="text-[11px] font-bold text-bronze hover:underline">حفظ التعديل</button>
             </div>
-            <textarea id="brief-copy" rows="4" class="w-full p-3 rounded-lg bg-stoneBg border border-borderSubtle text-xs leading-relaxed text-ink focus:outline-none focus:border-bronze"></textarea>
+            <textarea id="brief-copy" rows="4" maxlength="50000" oninput="PostWorkshop.markDirty()" class="w-full p-3 rounded-lg bg-stoneBg border border-borderSubtle text-xs leading-relaxed text-ink focus:outline-none focus:border-bronze"></textarea>
+          </div>
+
+          <div class="space-y-2 border border-borderSubtle rounded-xl p-3">
+            <div class="flex flex-wrap gap-2 text-xs"><button onclick="PostWorkshop.openEditor()" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold">إعادة توليد جزء</button><button onclick="PostWorkshop.openReview()" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold">مراجعة البوست</button></div>
+            <p id="post-review-state" role="status" aria-live="polite" class="text-xs text-muted"></p>
+            <div class="flex flex-wrap gap-2 text-xs"><select id="post-revision-selector" aria-label="نسخ البوست السابقة" class="min-w-0 flex-1 p-2 rounded-lg border border-borderSubtle"><option value="">نسخ سابقة: 0</option></select><button onclick="PostWorkshop.restoreVersion()" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle">استرجاع النسخة</button></div>
           </div>
 
           <!-- Visual & Material Specs -->
@@ -600,6 +606,26 @@
     </div>
   </div>
 
+  <div id="post-workshop-editor" role="dialog" aria-modal="true" aria-labelledby="workshop-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[92dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
+      <div class="flex items-center justify-between"><h3 id="workshop-heading" class="text-sm font-bold">إعادة توليد جزء من البوست</h3><button onclick="PostWorkshop.closeEditor()" aria-label="إغلاق محرر الجزء" class="p-2">✕</button></div>
+      <label class="block text-xs">الجزء المطلوب<select id="workshop-part" onchange="PostWorkshop.updatePart()" class="block w-full p-2 border border-borderSubtle rounded-lg"><option value="hook">الهوك — أول سطر فقط</option><option value="copy">نص البوست كامل</option><option value="visual">تصور الصورة</option><option value="brief">بريف الديزاينر</option></select></label>
+      <label class="block text-xs">ملاحظتك على التعديل<textarea id="workshop-note" rows="2" maxlength="2000" placeholder="مثال: هوك أقصر، أو بريف أوضح مع الحفاظ على الفكرة" class="block w-full p-2 border border-borderSubtle rounded-lg"></textarea></label>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"><label>الجزء الحالي<textarea id="workshop-current" rows="7" readonly class="block w-full p-2 border border-borderSubtle rounded-lg bg-stoneBg"></textarea></label><label>البديل المقترح — قابل للتعديل<textarea id="workshop-proposed" rows="7" class="block w-full p-2 border border-borderSubtle rounded-lg"></textarea></label></div>
+      <p id="workshop-status" role="status" aria-live="polite" class="text-xs text-muted"></p>
+      <p class="text-[11px] text-muted">صور التوليد وبيانات الخامات مرتبطة بالبوست الأصلي. تغيير جزء من بوست معتمد بيرجعه لمسودة؛ سجل النشر الفعلي مايتغيرش.</p>
+      <div class="flex flex-wrap gap-2 text-xs"><button onclick="PostWorkshop.generateAlternative()" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold">توليد بديل</button><button id="btn-apply-workshop" onclick="PostWorkshop.applyAlternative()" disabled class="px-4 py-2 rounded-lg bg-ink text-white font-bold">تطبيق وحفظ نسخة سابقة</button><button onclick="PostWorkshop.closeEditor()" class="px-3 py-2 rounded-lg bg-stoneBg">إلغاء</button></div>
+    </div>
+  </div>
+  <div id="post-review-dialog" role="dialog" aria-modal="true" aria-labelledby="review-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[92dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
+      <div class="flex items-center justify-between"><h3 id="review-heading" class="text-sm font-bold"></h3><button onclick="PostWorkshop.closeReview()" aria-label="إغلاق مراجعة البوست" class="p-2">✕</button></div>
+      <p id="review-semantic-status" role="status" class="text-xs text-bronze font-bold"></p><p id="review-summary" class="text-xs"></p><ul id="review-issues" class="space-y-2"></ul>
+      <p class="text-xs text-muted">المراجعة مساعدة لقرارك. ملاحظات الذكاء الاصطناعي مش إثباتًا لصحة المواصفات أو الادعاءات.</p>
+      <div class="flex flex-wrap gap-2 text-xs"><button onclick="PostWorkshop.openReview(true)" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle">إعادة المراجعة</button><button id="btn-approve-review" onclick="PostWorkshop.approveWithNotes()" class="hidden px-4 py-2 rounded-lg bg-ink text-white font-bold">اعتماد بعد مراجعتي للملاحظات</button><button onclick="PostWorkshop.closeReview()" class="px-3 py-2 rounded-lg bg-stoneBg">رجوع للتعديل</button></div>
+    </div>
+  </div>
+
   <div id="publication-editor" role="dialog" aria-modal="true" aria-labelledby="publication-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
     <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[92dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
       <div class="flex items-center justify-between"><h3 id="publication-heading" class="font-bold text-sm">تسجيل النشر الفعلي</h3><button onclick="ContentMemory.closePublish()" aria-label="إغلاق تسجيل النشر" class="p-2">✕</button></div>
@@ -694,12 +720,13 @@
   <div id="toast" role="status" aria-live="polite" class="fixed bottom-5 left-5 right-5 sm:right-auto sm:max-w-lg bg-ink text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
 
   <!-- Modular Scripts -->
-  <script src="js/storage.js?v=8"></script>
-  <script src="js/asset-library.js?v=8"></script>
-  <script src="js/material-catalog.js?v=8"></script>
-  <script src="js/content-memory.js?v=8"></script>
-  <script src="js/ai-engine.js?v=8"></script>
-  <script charset="UTF-8" src="js/content-studio.js?v=8"></script>
+  <script src="js/storage.js?v=9"></script>
+  <script src="js/asset-library.js?v=9"></script>
+  <script src="js/material-catalog.js?v=9"></script>
+  <script src="js/content-memory.js?v=9"></script>
+  <script src="js/post-workshop.js?v=9"></script>
+  <script src="js/ai-engine.js?v=9"></script>
+  <script charset="UTF-8" src="js/content-studio.js?v=9"></script>
   <script src="js/ads-intel.js?v=5"></script>
 
   <!-- Main Application Controller -->
@@ -752,11 +779,12 @@
       }
 
       async function switchWorkspace(companyId) {
-        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy()) {
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy() || PostWorkshop.isBusy()) {
           document.getElementById('workspace-selector').value = currentCompanyId;
           showToast('استنى لحد ما العملية الحالية تخلص.', true);
           return;
         }
+        if (!PostWorkshop.canLeave()) { document.getElementById('workspace-selector').value = currentCompanyId; return; }
         switching = true;
         const selector = document.getElementById('workspace-selector');
         const main = document.querySelector('main');
@@ -850,7 +878,8 @@
       }
 
       function canRestore() {
-        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy() || PostWorkshop.isBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
+        PostWorkshop.requireSavedCopy();
       }
 
       async function importBackup(event) {
@@ -922,6 +951,7 @@
       }
 
       function switchTab(tabName) {
+        if (tabName !== activeTab && !PostWorkshop.canLeave()) return;
         activeTab = tabName;
         ['calendar', 'memory', 'assets', 'ads', 'reports'].forEach(name => {
           document.getElementById(`view-${name}`).classList.toggle('hidden', name !== tabName);
@@ -1137,5 +1167,6 @@
   </script>
 </body>
 </html>
+
 
 
