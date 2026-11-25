@@ -388,6 +388,16 @@ const StorageEngine = (() => {
         || (log.diagnosis && (!object(log.diagnosis) || (log.diagnosis.campaigns !== undefined && !objects(log.diagnosis.campaigns)))))) {
       throw new Error('بيانات مساحة العمل ناقصة أو غير صالحة. لم يتم تغيير بياناتك.');
     }
+    if (ws.assets.references !== undefined) {
+      if (!Array.isArray(ws.assets.references)) throw new Error('مكتبة الصور غير صالحة.');
+      const ids = ws.assets.references.map(ref => validateReferenceMetadata(ref).id);
+      if (new Set(ids).size !== ids.length) throw new Error('في معرّفات صور مكررة.');
+    }
+    if (ws.assets.selectedReferenceIds !== undefined && (!Array.isArray(ws.assets.selectedReferenceIds)
+      || ws.assets.selectedReferenceIds.length > 4 || new Set(ws.assets.selectedReferenceIds).size !== ws.assets.selectedReferenceIds.length
+      || ws.assets.selectedReferenceIds.some(id => !(ws.assets.references || []).some(ref => ref.id === id)))) throw new Error('اختيار الصور غير صالح.');
+    for (const item of [...ws.calendar, ...ws.ideas]) if (item.referenceImages !== undefined && !Array.isArray(item.referenceImages)) throw new Error('مراجع البوست أو الفكرة غير صالحة.');
+    referenceDescriptors(ws);
     return ws;
   }
 
@@ -400,14 +410,140 @@ const StorageEngine = (() => {
   function loadPlatformRules() { return loadRecord('platform_rules', 'data/platform_rules.json', DEFAULT_PLATFORM_RULES, validateRules); }
   function savePlatformRules(rules) { validateRules(rules); return saveRecord('platform_rules', 'data/platform_rules.json', rules); }
 
+  const MAX_REFERENCE_BYTES = 600 * 1024;
+  function validateReferenceId(id) {
+    if (typeof id !== 'string' || !/^ref-[a-z0-9-]{8,64}$/.test(id)) throw new Error('معرّف الصورة غير صالح.');
+  }
+  function validateReferenceMetadata(ref) {
+    if (!ref || typeof ref !== 'object') throw new Error('بيانات مرجع الصورة غير صالحة.');
+    validateReferenceId(ref.id);
+    for (const [field, limit] of [['title', 160], ['description', 2000], ['material', 200]]) {
+      if (typeof ref[field] !== 'string' || ref[field].length > limit) throw new Error('بيانات مرجع الصورة ناقصة أو طويلة زيادة.');
+    }
+    if (!['project', 'material', 'design', 'logo'].includes(ref.kind)) throw new Error('نوع مرجع الصورة غير صالح.');
+    return ref;
+  }
+  function referenceDescriptors(workspace) {
+    const all = [...(workspace.assets?.references || []),
+      ...(workspace.calendar || []).flatMap(post => post.referenceImages || []),
+      ...(workspace.ideas || []).flatMap(idea => idea.referenceImages || [])];
+    const unique = new Map();
+    for (const ref of all) { validateReferenceMetadata(ref); unique.set(ref.id, ref); }
+    return [...unique.values()];
+  }
+  function validateImageData(image) {
+    validateReferenceId(image?.id);
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(image.mimeType)
+      || typeof image.data !== 'string' || !image.data.length || image.data.length > Math.ceil(MAX_REFERENCE_BYTES / 3) * 4
+      || image.data.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(image.data)
+      || !Number.isInteger(image.width) || !Number.isInteger(image.height)
+      || image.width < 1 || image.height < 1 || image.width > 1600 || image.height > 1600) {
+      throw new Error('ملف الصورة غير صالح أو أكبر من الحجم المسموح.');
+    }
+    let bytes;
+    try { bytes = atob(image.data); } catch { throw new Error('بيانات الصورة غير صالحة.'); }
+    const signature = image.mimeType === 'image/jpeg' ? bytes.startsWith('\xff\xd8\xff')
+      : image.mimeType === 'image/png' ? bytes.startsWith('\x89PNG\r\n\x1a\n')
+      : bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP';
+    if (!signature || bytes.length > MAX_REFERENCE_BYTES) throw new Error('محتوى الصورة لا يطابق نوع الملف.');
+    return image;
+  }
+  const imageKey = (companyId, id) => 'image_' + companyId + '_' + id;
+  const imagePath = (companyId, id) => `data/reference-images/${encodeURIComponent(companyId)}/${id}.json`;
+
+  async function saveReferenceImage(companyId, image) {
+    validateImageData(image);
+    const key = imageKey(companyId, image.id);
+    const existing = await idbGet(key);
+    if (existing && (existing.data !== image.data || existing.mimeType !== image.mimeType)) throw new Error('في صورة مختلفة بنفس المعرّف. ارفع الصورة كمرجع جديد.');
+    return saveRecord(key, imagePath(companyId, image.id), image);
+  }
+  async function loadReferenceImage(companyId, id) {
+    validateReferenceId(id);
+    const key = imageKey(companyId, id);
+    const cached = await idbGet(key);
+    if (cached) return validateImageData(cached);
+    if (!isGitHubConfigured()) throw new Error('الصورة مش موجودة على الجهاز. استورد النسخة الكاملة أو اربط GitHub اللي عليه الصور.');
+    const cfg = getConfig();
+    const remote = await ghReadFile(imagePath(companyId, id), cfg);
+    if (!remote.exists) throw new Error('الصورة مش مرفوعة على GitHub. افتح جهاز الرفع واضغط إعادة محاولة المزامنة.');
+    validateImageData(remote.data);
+    if (remote.data.id !== id) throw new Error('الصورة المسترجعة لا تطابق المرجع.');
+    await idbWrite([[key, remote.data], ['sync_' + key, { dirty: false, knownRemote: true, remoteSha: remote.sha, source: configSource(cfg) }]]);
+    return remote.data;
+  }
+  async function referenceImageState(companyId, id) {
+    validateReferenceId(id);
+    const meta = await idbGet('sync_' + imageKey(companyId, id));
+    return isGitHubConfigured() && meta && !meta.dirty && meta.source === configSource(getConfig()) ? 'synced' : 'local';
+  }
+  async function syncWorkspaceImages(companyId, workspace) {
+    const results = [];
+    for (const ref of referenceDescriptors(workspace)) {
+      const key = imageKey(companyId, ref.id);
+      const cached = await idbGet(key);
+      if (!cached) continue; // Remote-only images remain lazy-loaded.
+      const meta = await idbGet('sync_' + key);
+      if (meta?.dirty || (isGitHubConfigured() && meta?.source !== configSource(getConfig()))) {
+        results.push(await saveReferenceImage(companyId, cached));
+      }
+    }
+    return results.find(r => r.error) || { local: true, synced: isGitHubConfigured() };
+  }
+
+  async function createPortableBackup(company, workspace) {
+    const backup = createBackup(company, workspace);
+    backup.version = 2;
+    backup.imageFiles = [];
+    let total = 0;
+    for (const ref of referenceDescriptors(workspace)) {
+      const image = await loadReferenceImage(company.id, ref.id);
+      total += image.data.length;
+      if (total > 40 * 1024 * 1024) throw new Error('صور النسخة أكبر من 40 ميجابايت. قلّل الصور غير المستخدمة قبل التصدير.');
+      backup.imageFiles.push(clone(image));
+    }
+    return backup;
+  }
+  function validateBackupImages(backup) {
+    const refs = referenceDescriptors(backup.workspace);
+    if (backup.version === 1) {
+      if (refs.length) throw new Error('النسخة تحتوي مراجع صور من غير ملفاتها. استخدم النسخة الاحتياطية الكاملة.');
+      return [];
+    }
+    if (!Array.isArray(backup.imageFiles) || backup.imageFiles.length !== refs.length) throw new Error('النسخة الاحتياطية ناقصة صور. بياناتك لم تتغير.');
+    const ids = new Set();
+    for (const image of backup.imageFiles) {
+      validateImageData(image);
+      if (ids.has(image.id) || !refs.some(ref => ref.id === image.id)) throw new Error('صور النسخة الاحتياطية لا تطابق المرجعيات.');
+      ids.add(image.id);
+    }
+    return backup.imageFiles;
+  }
+  async function importBackupImages(text, companyId) {
+    parseBackup(text, companyId);
+    const backup = JSON.parse(text);
+    const images = validateBackupImages(backup);
+    const entries = [];
+    for (const image of images) {
+      const key = imageKey(companyId, image.id);
+      const old = await idbGet(key);
+      if (old && (old.data !== image.data || old.mimeType !== image.mimeType)) throw new Error('في صورة مختلفة بنفس معرّف النسخة. البيانات الحالية لم تتغير.');
+      if (!old) entries.push([key, image], ['sync_' + key, { dirty: true, revision: 1 }]);
+    }
+    if (entries.length) await idbWrite(entries);
+  }
+
   async function refreshSyncStatus(id) {
     const metas = await Promise.all(['companies', 'ws_' + id, 'platform_rules'].map(key => idbGet('sync_' + key)));
+    const ws = await idbGet('ws_' + id);
+    if (ws) for (const ref of referenceDescriptors(ws)) metas.push(await idbGet('sync_' + imageKey(id, ref.id)));
     if (metas.some(meta => meta?.dirty)) updateSyncBadge('local', 'تعديلات على الجهاز في انتظار المزامنة');
     else if (!isGitHubConfigured()) updateSyncBadge('local', 'محفوظ على الجهاز');
   }
 
   async function retryPendingSync(id) {
-    const results = [];
+    const ws = await idbGet('ws_' + id);
+    const results = ws ? [await syncWorkspaceImages(id, ws)] : [];
     for (const [key, path] of [['companies', 'data/companies.json'], ['ws_' + id, `data/workspaces/${id}.json`], ['platform_rules', 'data/platform_rules.json']]) results.push(await retryRecord(key, path));
     const failed = results.find(r => r.error);
     if (failed) updateSyncBadge('error', 'محفوظ على الجهاز — المزامنة متوقفة');
@@ -421,8 +557,9 @@ const StorageEngine = (() => {
   function parseBackup(text, companyId) {
     let backup;
     try { backup = JSON.parse(text); } catch { throw new Error('الملف مش JSON صالح. اختار نسخة احتياطية من التطبيق.'); }
-    if (backup?.format !== 'nassar-studio-workspace' || backup.version !== 1 || backup.company?.id !== companyId) throw new Error('النسخة مش مدعومة أو تخص شركة تانية. افتح الشركة الصحيحة الأول.');
+    if (backup?.format !== 'nassar-studio-workspace' || ![1, 2].includes(backup.version) || backup.company?.id !== companyId) throw new Error('النسخة مش مدعومة أو تخص شركة تانية. افتح الشركة الصحيحة الأول.');
     validateWorkspace(backup.workspace);
+    validateBackupImages(backup);
     return clone(backup.workspace);
   }
   function saveRecovery(id, workspace) { return idbSet('recovery_' + id, clone(workspace)); }
@@ -469,6 +606,17 @@ const StorageEngine = (() => {
   }
 
   return {
+    MAX_REFERENCE_BYTES,
+    validateWorkspace,
+    validateReferenceMetadata,
+    validateImageData,
+    referenceDescriptors,
+    saveReferenceImage,
+    loadReferenceImage,
+    referenceImageState,
+    syncWorkspaceImages,
+    createPortableBackup,
+    importBackupImages,
     describeError,
     createBackup,
     parseBackup,

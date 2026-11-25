@@ -42,6 +42,7 @@ const ContentStudio = (() => {
 
     const tbody = document.getElementById('posts-table-body');
     const posts = ws.calendar || [];
+    if (!posts.length) AssetLibrary.renderPostReferences(null, ws);
     if (!tbody) return;
 
     if (posts.length === 0) {
@@ -68,6 +69,7 @@ const ContentStudio = (() => {
     `).join('');
 
     const post = posts[selectedPostIndex];
+    AssetLibrary.renderPostReferences(post, ws);
     const panel = document.getElementById('brief-inspector-content');
     if (panel && post) {
       panel.classList.remove('opacity-40', 'pointer-events-none');
@@ -149,7 +151,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateCalendar() {
-    if (generating) return;
+    if (generating || AssetLibrary.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-calendar');
     const orig = btn.innerHTML;
     const mode = document.getElementById('calendar-generation-mode').value;
@@ -160,7 +162,8 @@ const ContentStudio = (() => {
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner ml-1.5"></span> جاري التوليد...`;
       const ws = App.getCurrentWorkspace();
-      const posts = await AIEngine.generateCalendar8(ws);
+      const references = await AssetLibrary.prepareReferences(ws);
+      const posts = await AIEngine.generateCalendar8(ws, references);
       if (!Array.isArray(posts) || posts.length !== 8 || posts.some(p => !p || typeof p.title !== 'string')) throw new Error('رد التوليد غير مكتمل. الكاليندر الحالية لم تتغير.');
       const generated = posts.map(p => ({ ...p, status: 'مسودة', saturationCounted: false, referenceImage: '' }));
       await App.checkpoint(ws);
@@ -174,7 +177,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateSinglePost() {
-    if (generating) return;
+    if (generating || AssetLibrary.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-single');
     const orig = btn.innerHTML;
     const noteEl = document.getElementById('single-post-note');
@@ -184,7 +187,8 @@ const ContentStudio = (() => {
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner spinner-dark ml-1.5"></span> جاري التوليد...`;
       const ws = App.getCurrentWorkspace();
-      const post = await AIEngine.generateSinglePost(ws, note);
+      const references = await AssetLibrary.prepareReferences(ws);
+      const post = await AIEngine.generateSinglePost(ws, note, references);
       ws.calendar.unshift({ ...post, status: 'مسودة', saturationCounted: false, referenceImage: '' });
       if (noteEl) noteEl.value = '';
       selectedPostIndex = 0;
@@ -196,7 +200,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateRefImage() {
-    if (generating) return;
+    if (generating || AssetLibrary.isBusy() || App.isWorkspaceBusy()) return;
     const ws = App.getCurrentWorkspace();
     const post = ws.calendar[selectedPostIndex];
     if (!post) return;
@@ -266,16 +270,17 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateIdeas() {
-    if (generating) return;
+    if (generating || AssetLibrary.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-ideas');
     const orig = btn.innerHTML;
     try {
       generating = true;
       btn.disabled = true; btn.innerHTML = `<span class="spinner ml-1"></span> جاري الاستنباط...`;
       const ws = App.getCurrentWorkspace();
-      const list = await AIEngine.generateIdeas(ws, 4);
+      const references = await AssetLibrary.prepareReferences(ws);
+      const list = await AIEngine.generateIdeas(ws, 4, references);
       if (!Array.isArray(list) || !list.length || list.some(it => !it || typeof it.title !== 'string')) throw new Error('لم يتم استلام أفكار صالحة. حاول مرة تانية.');
-      list.forEach(it => ws.ideas.unshift({ id: 'idea-' + Date.now() + Math.random(), title: it.title, insight: it.insight, segment: it.segment || 'B2C', saturation: 0, status: 'pending' }));
+      list.forEach(it => ws.ideas.unshift({ id: 'idea-' + Date.now() + Math.random(), title: it.title, insight: it.insight, referenceImages: it.referenceImages || [], segment: it.segment || 'B2C', saturation: 0, status: 'pending' }));
       await App.persistWorkspace(); App.refreshUI(); App.showToast('تم توليد 4 أفكار جديدة');
     } catch (e) { App.showError(e); }
     finally { generating = false; btn.disabled = false; btn.innerHTML = orig; }
@@ -292,3 +297,4 @@ const ContentStudio = (() => {
 
   return { isGenerating, renderCalendarView, renderMemoryAndIdeasView, selectPost, setPostStatus, excludeIdea, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
 })();
+

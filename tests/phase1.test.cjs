@@ -33,7 +33,7 @@ function harness() {
   let failWrite = false, networkDown = false, rejectWrites = false, remoteCounter = 0, confirmResult = true;
   const element = id => {
     if (!elements.has(id)) elements.set(id, { id, value: '', innerHTML: '', textContent: '', disabled: false,
-      classList: { add() {}, remove() {}, toggle() {} }, click() {} });
+      classList: { add() {}, remove() {}, toggle() {} }, click() {}, removeAttribute(name){delete this[name];} });
     return elements.get(id);
   };
   const db = { objectStoreNames: { contains: () => true }, close() {}, transaction(store, mode) {
@@ -94,14 +94,14 @@ function harness() {
   let app,studio,ads;
   const boot = async () => {
     const appProxy={};
-    Object.assign(scope,{StorageEngine:storage,App:appProxy,AIEngine:api});
+    Object.assign(scope,{StorageEngine:storage,App:appProxy,AIEngine:api,AssetLibrary:{isBusy:()=>false,render(){},renderPostReferences(){},prepareReferences:async()=>[]}});
     studio=evaluate(sources['js/content-studio.js'],'ContentStudio');
     ads=evaluate(sources['js/ads-intel.js'],'AdsIntel');
     Object.assign(scope,{ContentStudio:studio,AdsIntel:ads});
     const inline=[...sources['index.html'].matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].find(m=>m[1].includes('const App ='))[1];
     app=evaluate(inline,'App');Object.assign(appProxy,app);await app.init();return app;
   };
-  return {storage,boot,api,records,remote,requests,dialogs,downloads,element,
+  return {storage,boot,api,records,remote,requests,dialogs,downloads,element,scope,evaluate,
     get app(){return app;},get studio(){return studio;},get ads(){return ads;},
     configure(){storage.saveConfig({ghOwner:'test',ghRepo:'test',ghBranch:'main',ghToken:'fake-secret',geminiKey:'fake-google-secret'});},
     failNextWrite(){failWrite=true;},network(value){networkDown=value;},rejectWrites(value){rejectWrites=value;},
@@ -217,4 +217,7 @@ async function runTests() {
   return results;
 }
 
-runTests().then(results => console.log(results.length + ' tests passed\n' + results.join('\n'))).catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) runTests().then(results => console.log(results.length + ' tests passed\n' + results.join('\n'))).catch(error => { console.error(error); process.exitCode = 1; });
+
+
+module.exports = { harness, runTests, sources, assert };
