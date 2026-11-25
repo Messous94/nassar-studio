@@ -2,6 +2,8 @@ const ContentStudio = (() => {
   const EXCLUSION_OPTIONS = { 'مرفوض': 'rejected', 'متشبع': 'saturated' };
   const POST_STATUSES = ['مسودة', 'معتمد', 'اتعمل', 'اترفع', ...Object.keys(EXCLUSION_OPTIONS)];
   let selectedPostIndex = 0;
+  let generating = false;
+  function isGenerating() { return generating; }
 
   function getStatusBadgeClass(status) {
     if (status === 'معتمد') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -124,7 +126,7 @@ const ContentStudio = (() => {
       await App.persistWorkspace();
       App.showToast(message);
     } catch (e) {
-      App.showToast(e.message, true);
+      App.showError(e);
     }
     App.refreshUI();
   }
@@ -147,28 +149,38 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateCalendar() {
+    if (generating) return;
     const btn = document.getElementById('btn-gen-calendar');
     const orig = btn.innerHTML;
+    const mode = document.getElementById('calendar-generation-mode').value;
+    const workspace = App.getCurrentWorkspace();
+    if (mode === 'replace' && workspace.calendar.length && !confirm('استبدال الكاليندر الحالية بعد نجاح التوليد؟ هتتحفظ نسخة للاسترجاع.')) return;
     try {
+      generating = true;
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner ml-1.5"></span> جاري التوليد...`;
       const ws = App.getCurrentWorkspace();
       const posts = await AIEngine.generateCalendar8(ws);
-      ws.calendar = posts.map(p => ({ ...p, status: 'مسودة', saturationCounted: false, referenceImage: '' }));
-      selectedPostIndex = 0;
-      await App.persistWorkspace();
+      if (!Array.isArray(posts) || posts.length !== 8 || posts.some(p => !p || typeof p.title !== 'string')) throw new Error('رد التوليد غير مكتمل. الكاليندر الحالية لم تتغير.');
+      const generated = posts.map(p => ({ ...p, status: 'مسودة', saturationCounted: false, referenceImage: '' }));
+      await App.checkpoint(ws);
+      selectedPostIndex = mode === 'replace' ? 0 : ws.calendar.length;
+      ws.calendar = mode === 'replace' ? generated : [...ws.calendar, ...generated];
+      await App.persistWorkspace(ws);
       App.refreshUI();
       App.showToast('تم توليد 8 بوستات بنجاح');
-    } catch (e) { App.showToast(e.message, true); }
-    finally { btn.disabled = false; btn.innerHTML = orig; }
+    } catch (e) { App.showError(e); }
+    finally { generating = false; btn.disabled = false; btn.innerHTML = orig; }
   }
 
   async function handleGenerateSinglePost() {
+    if (generating) return;
     const btn = document.getElementById('btn-gen-single');
     const orig = btn.innerHTML;
     const noteEl = document.getElementById('single-post-note');
     const note = noteEl ? noteEl.value.trim() : '';
     try {
+      generating = true;
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner spinner-dark ml-1.5"></span> جاري التوليد...`;
       const ws = App.getCurrentWorkspace();
@@ -179,25 +191,27 @@ const ContentStudio = (() => {
       await App.persistWorkspace();
       App.refreshUI();
       App.showToast('تم توليد البوست الفردي');
-    } catch (e) { App.showToast(e.message, true); }
-    finally { btn.disabled = false; btn.innerHTML = orig; }
+    } catch (e) { App.showError(e); }
+    finally { generating = false; btn.disabled = false; btn.innerHTML = orig; }
   }
 
   async function handleGenerateRefImage() {
+    if (generating) return;
     const ws = App.getCurrentWorkspace();
     const post = ws.calendar[selectedPostIndex];
     if (!post) return;
     const btn = document.getElementById('btn-gen-ref-img');
     const orig = btn.innerHTML;
     try {
+      generating = true;
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner ml-1.5"></span> جاري توليد الصورة...`;
       post.referenceImage = await AIEngine.generateReferenceImage(post);
       await App.persistWorkspace();
       App.refreshUI();
       App.showToast('تم توليد صورة الريفرنس');
-    } catch (e) { App.showToast(e.message, true); }
-    finally { btn.disabled = false; btn.innerHTML = orig; }
+    } catch (e) { App.showError(e); }
+    finally { generating = false; btn.disabled = false; btn.innerHTML = orig; }
   }
 
   function exportTeamCalendarFile() {
@@ -252,26 +266,29 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateIdeas() {
+    if (generating) return;
     const btn = document.getElementById('btn-gen-ideas');
     const orig = btn.innerHTML;
     try {
+      generating = true;
       btn.disabled = true; btn.innerHTML = `<span class="spinner ml-1"></span> جاري الاستنباط...`;
       const ws = App.getCurrentWorkspace();
       const list = await AIEngine.generateIdeas(ws, 4);
+      if (!Array.isArray(list) || !list.length || list.some(it => !it || typeof it.title !== 'string')) throw new Error('لم يتم استلام أفكار صالحة. حاول مرة تانية.');
       list.forEach(it => ws.ideas.unshift({ id: 'idea-' + Date.now() + Math.random(), title: it.title, insight: it.insight, segment: it.segment || 'B2C', saturation: 0, status: 'pending' }));
       await App.persistWorkspace(); App.refreshUI(); App.showToast('تم توليد 4 أفكار جديدة');
-    } catch (e) { App.showToast(e.message, true); }
-    finally { btn.disabled = false; btn.innerHTML = orig; }
+    } catch (e) { App.showError(e); }
+    finally { generating = false; btn.disabled = false; btn.innerHTML = orig; }
   }
 
   async function approveIdea(i) { const ws = App.getCurrentWorkspace(); if (ws.ideas[i]?.status !== 'pending') return; ws.ideas[i].status = 'approved'; ws.ideas[i].saturation = 0; await App.persistWorkspace(); App.refreshUI(); }
-  async function deleteIdea(i) { const ws = App.getCurrentWorkspace(); if (!ws.ideas[i] || AIEngine.exclusionLabel(ws.ideas[i])) return; ws.ideas.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
+  async function deleteIdea(i) { const ws = App.getCurrentWorkspace(); if (!ws.ideas[i] || AIEngine.exclusionLabel(ws.ideas[i])) return; if (!confirm('حذف الفكرة من المكتبة؟')) return; await App.checkpoint(ws); ws.ideas.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
   async function addRule() { const inp = document.getElementById('new-rule-input'); if (!inp.value.trim()) return; const ws = App.getCurrentWorkspace(); if (ws.brandCore.rules.length >= 15) { App.showToast('الحد الأقصى 15 قاعدة', true); return; } ws.brandCore.rules.push(inp.value.trim()); inp.value = ''; await App.persistWorkspace(); App.refreshUI(); }
-  async function removeRule(i) { const ws = App.getCurrentWorkspace(); ws.brandCore.rules.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
+  async function removeRule(i) { const ws = App.getCurrentWorkspace(); if (!ws.brandCore.rules[i] || !confirm('حذف قاعدة الكتابة؟')) return; await App.checkpoint(ws); ws.brandCore.rules.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
   async function addOffer() { const t = document.getElementById('new-offer-title').value.trim(), s = document.getElementById('new-offer-segment').value, d = document.getElementById('new-offer-details').value.trim(); if (!t || !d) return; const ws = App.getCurrentWorkspace(); ws.brandCore.offers.push({ id: 'off-' + Date.now(), title: t, segment: s, details: d }); document.getElementById('new-offer-title').value = ''; document.getElementById('new-offer-details').value = ''; await App.persistWorkspace(); App.refreshUI(); }
-  async function removeOffer(i) { const ws = App.getCurrentWorkspace(); ws.brandCore.offers.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
+  async function removeOffer(i) { const ws = App.getCurrentWorkspace(); if (!ws.brandCore.offers[i] || !confirm('حذف العرض؟')) return; await App.checkpoint(ws); ws.brandCore.offers.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
   async function saveBrandCore() { const ws = App.getCurrentWorkspace(); ws.brandCore.identity = document.getElementById('core-identity').value.trim(); ws.brandCore.tone = document.getElementById('core-tone').value.trim(); ws.brandCore.segments = document.getElementById('core-segments').value.trim(); ws.brandCore.materials = document.getElementById('core-materials').value.split(',').map(s => s.trim()).filter(Boolean); await App.persistWorkspace(); App.showToast('تم حفظ الهوية'); }
   async function saveGoal() { const ws = App.getCurrentWorkspace(); ws.goal.objective = document.getElementById('goal-objective-input').value.trim(); await App.persistWorkspace(); App.showToast('تم حفظ الهدف'); }
 
-  return { renderCalendarView, renderMemoryAndIdeasView, selectPost, setPostStatus, excludeIdea, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
+  return { isGenerating, renderCalendarView, renderMemoryAndIdeasView, selectPost, setPostStatus, excludeIdea, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
 })();

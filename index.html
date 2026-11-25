@@ -88,9 +88,9 @@
 
       <!-- Sync Status & Settings Gear -->
       <div class="flex items-center gap-2.5 shrink-0">
-        <div class="hidden xl:flex items-center gap-2 text-xs text-muted bg-stoneBg px-3 py-1.5 rounded-lg border border-borderSubtle">
+        <div class="flex items-center gap-2 text-[10px] sm:text-xs text-muted bg-stoneBg px-3 py-1.5 rounded-lg border border-borderSubtle">
           <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span id="sync-label">جاهز</span>
+          <span id="sync-label">جاري التحميل</span>
         </div>
         <button onclick="App.openSettingsModal()" class="px-3 py-1.5 rounded-lg bg-stoneBg hover:bg-borderSubtle/60 text-ink border border-borderSubtle text-xs font-bold flex items-center gap-1.5 transition" title="إعدادات API و GitHub">
           <i class="fa-solid fa-gear text-bronze"></i>
@@ -134,6 +134,10 @@
           <button id="btn-gen-single" onclick="ContentStudio.handleGenerateSinglePost()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-stoneBg hover:bg-borderSubtle/60 text-ink border border-borderSubtle transition">
             + بوست فردي
           </button>
+          <select id="calendar-generation-mode" aria-label="طريقة إضافة الكاليندر" class="max-w-full px-3 py-2 rounded-lg text-xs bg-stoneBg border border-borderSubtle">
+            <option value="append">إضافة للكاليندر الحالية</option>
+            <option value="replace">استبدال الكاليندر الحالية</option>
+          </select>
           <button id="btn-gen-calendar" onclick="ContentStudio.handleGenerateCalendar()" class="px-4 py-2 rounded-lg text-xs font-bold bg-ink hover:bg-ink/90 text-white transition">
             <i class="fa-solid fa-wand-magic-sparkles text-bronze ml-1"></i>توليد كاليندر (8 بوستات)
           </button>
@@ -487,7 +491,7 @@
 
   <!-- ==================== SETTINGS MODAL (GEMINI API & GITHUB REPO) ==================== -->
   <div id="settings-modal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
-    <div class="bg-white border border-borderSubtle rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl">
+    <div class="bg-white border border-borderSubtle rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl max-h-[90dvh] overflow-y-auto">
       <div class="flex items-center justify-between border-b border-borderSubtle pb-3">
         <h3 class="text-base font-bold text-ink"><i class="fa-solid fa-gear text-bronze ml-1.5"></i>إعدادات الربط السحابي و Google API</h3>
         <button onclick="App.closeSettingsModal()" class="text-muted hover:text-ink font-bold">✕</button>
@@ -509,6 +513,19 @@
               <input id="cfg-gh-branch" type="text" value="main" placeholder="Branch (main)" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle" />
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="space-y-2 pt-3 border-t border-borderSubtle text-xs">
+        <h4 class="font-bold text-ink">حماية بيانات الشركة الحالية</h4>
+        <p class="text-muted">النسخة تشمل المحتوى والأفكار والمرجعيات ونتائج الإعلانات للشركة المفتوحة. مفاتيح الربط وقواعد المنصات العامة مش ضمن الملف.</p>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="App.exportBackup()" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold">تنزيل نسخة احتياطية</button>
+          <label class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold cursor-pointer">استيراد نسخة احتياطية
+            <input id="backup-file" type="file" accept=".json,application/json" onchange="App.importBackup(event)" class="hidden" />
+          </label>
+          <button onclick="App.restoreRecovery()" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold">استرجاع ما قبل آخر تغيير كبير</button>
+          <button id="btn-retry-sync" onclick="App.retrySync()" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle font-bold">إعادة محاولة المزامنة</button>
         </div>
       </div>
 
@@ -556,13 +573,13 @@
   </div>
 
   <!-- Toast Notification -->
-  <div id="toast" class="fixed bottom-5 left-5 bg-ink text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
+  <div id="toast" role="status" aria-live="polite" class="fixed bottom-5 left-5 right-5 sm:right-auto sm:max-w-lg bg-ink text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
 
   <!-- Modular Scripts -->
-  <script src="js/storage.js"></script>
-  <script src="js/ai-engine.js?v=4"></script>
-  <script charset="UTF-8" src="js/content-studio.js?v=4"></script>
-  <script src="js/ads-intel.js"></script>
+  <script src="js/storage.js?v=5"></script>
+  <script src="js/ai-engine.js?v=5"></script>
+  <script charset="UTF-8" src="js/content-studio.js?v=5"></script>
+  <script src="js/ads-intel.js?v=5"></script>
 
   <!-- Main Application Controller -->
   <script>
@@ -572,6 +589,10 @@
       let currentWorkspace = null;
       let platformRules = null;
       let activeTab = 'calendar';
+      const workspaceOwners = new WeakMap();
+      let restoring = false;
+      let switching = false;
+      let toastTimer;
 
       async function init() {
         companies = await StorageEngine.loadCompaniesList();
@@ -584,14 +605,20 @@
 
         renderCompanySelector();
         currentWorkspace = await StorageEngine.loadWorkspace(currentCompanyId);
+        workspaceOwners.set(currentWorkspace, currentCompanyId);
         platformRules = await StorageEngine.loadPlatformRules();
+        await StorageEngine.refreshSyncStatus(currentCompanyId);
         refreshUI();
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       }
 
       function renderCompanySelector() {
         const sel = document.getElementById('workspace-selector');
         sel.innerHTML = companies.map(c =>
-          `<option value="${c.id}" ${c.id === currentCompanyId ? 'selected' : ''}>${c.name}</option>`
+          `<option value="${escapeHtml(c.id)}" ${c.id === currentCompanyId ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
         ).join('');
 
         const comp = getCurrentCompany();
@@ -602,12 +629,34 @@
       }
 
       async function switchWorkspace(companyId) {
-        currentCompanyId = companyId;
-        localStorage.setItem('ns_active_company', companyId);
-        renderCompanySelector();
-        currentWorkspace = await StorageEngine.loadWorkspace(companyId);
-        refreshUI();
-        showToast(`تم الانتقال إلى بيئة عمل: ${getCurrentCompany().name}`);
+        if (restoring || switching || ContentStudio.isGenerating()) {
+          document.getElementById('workspace-selector').value = currentCompanyId;
+          showToast('استنى لحد ما العملية الحالية تخلص.', true);
+          return;
+        }
+        switching = true;
+        const selector = document.getElementById('workspace-selector');
+        const main = document.querySelector('main');
+        selector.disabled = true;
+        main.inert = true;
+        try {
+          try { await persistWorkspace(); }
+          catch (error) { if (!error.savedLocally) throw error; showError(error); }
+          const workspace = await StorageEngine.loadWorkspace(companyId);
+          currentCompanyId = companyId;
+          currentWorkspace = workspace;
+          workspaceOwners.set(workspace, companyId);
+          localStorage.setItem('ns_active_company', companyId);
+          renderCompanySelector();
+          refreshUI();
+          await StorageEngine.refreshSyncStatus(companyId);
+          showToast(`تم الانتقال إلى بيئة عمل: ${getCurrentCompany().name}`);
+        } finally {
+          selector.value = currentCompanyId;
+          selector.disabled = false;
+          main.inert = false;
+          switching = false;
+        }
       }
 
       function getCurrentCompany() {
@@ -622,13 +671,101 @@
         return platformRules;
       }
 
-      async function persistWorkspace() {
-        await StorageEngine.saveWorkspace(currentCompanyId, currentWorkspace);
+      async function persistWorkspace(workspace = currentWorkspace) {
+        const id = workspaceOwners.get(workspace);
+        if (!id) throw new Error('مساحة العمل غير جاهزة للحفظ.');
+        const result = await StorageEngine.saveWorkspace(id, workspace);
+        if (result.error) {
+          const error = new Error('اتحفظ على الجهاز، لكن المزامنة فشلت: ' + result.error);
+          error.savedLocally = true;
+          refreshUI();
+          throw error;
+        }
+        return result;
+      }
+
+      async function checkpoint(workspace = currentWorkspace) {
+        const id = workspaceOwners.get(workspace);
+        if (!id) throw new Error('مساحة العمل غير جاهزة.');
+        await StorageEngine.saveRecovery(id, workspace);
+      }
+
+      function showError(error) { showToast(StorageEngine.describeError(error), true); }
+
+      function downloadJSON(value, filename) {
+        const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json;charset=utf-8' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function exportBackup() {
+        try {
+          downloadJSON(StorageEngine.createBackup(getCurrentCompany(), currentWorkspace), currentCompanyId + '-backup-' + new Date().toISOString().slice(0, 10) + '.json');
+          showToast('تم تجهيز النسخة الاحتياطية للتنزيل');
+        } catch (error) { showError(error); }
+      }
+
+      function canRestore() {
+        if (restoring || switching || ContentStudio.isGenerating()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
+      }
+
+      async function importBackup(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+          canRestore();
+          restoring = true;
+          const id = currentCompanyId;
+          if (file.size > 20 * 1024 * 1024) throw new Error('حجم النسخة أكبر من 20 ميجابايت.');
+          const workspace = StorageEngine.parseBackup(await file.text(), id);
+          if (!confirm('استبدال بيانات الشركة الحالية بالنسخة الاحتياطية؟ هتتحفظ نسخة من البيانات الحالية للاسترجاع.')) return;
+          await checkpoint();
+          currentWorkspace = workspace;
+          workspaceOwners.set(workspace, id);
+          refreshUI();
+          await persistWorkspace();
+          showToast('تم استرجاع النسخة الاحتياطية وحفظها');
+        } catch (error) { showError(error); }
+        finally { restoring = false; event.target.value = ''; }
+      }
+
+      async function restoreRecovery() {
+        try {
+          canRestore();
+          restoring = true;
+          const previous = await StorageEngine.loadRecovery(currentCompanyId);
+          if (!previous) throw new Error('مفيش نسخة استرجاع للشركة دي لسه.');
+          if (!confirm('استرجاع بيانات الشركة لما قبل آخر حذف أو استبدال؟')) return;
+          StorageEngine.parseBackup(JSON.stringify(StorageEngine.createBackup(getCurrentCompany(), previous)), currentCompanyId);
+          await checkpoint();
+          currentWorkspace = previous;
+          workspaceOwners.set(previous, currentCompanyId);
+          refreshUI();
+          await persistWorkspace();
+          showToast('تم استرجاع البيانات');
+        } catch (error) { showError(error); }
+        finally { restoring = false; }
+      }
+
+      async function retrySync() {
+        const button = document.getElementById('btn-retry-sync');
+        try {
+          if (!StorageEngine.isGitHubConfigured()) throw new Error('أدخل بيانات GitHub واحفظ الإعدادات الأول.');
+          button.disabled = true;
+          const result = await StorageEngine.retryPendingSync(currentCompanyId);
+          if (result.error) throw new Error(result.error);
+          showToast('اكتملت المزامنة');
+        } catch (error) { showError(error); }
+        finally { button.disabled = false; }
       }
 
       async function updatePlatformRules(newRules) {
         platformRules = newRules;
-        await StorageEngine.savePlatformRules(newRules);
+        const result = await StorageEngine.savePlatformRules(newRules);
+        if (result.error) throw new Error(result.error);
       }
 
       function switchTab(tabName) {
@@ -660,8 +797,8 @@
             : delivered.map((item, idx) => `
               <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle flex items-center justify-between text-xs">
                 <div>
-                  <strong class="text-ink">${item.client}</strong>
-                  <span class="text-muted"> • ${item.location} • خامة: <strong class="text-bronze">${item.material}</strong></span>
+                  <strong class="text-ink">${escapeHtml(item.client)}</strong>
+                  <span class="text-muted"> • ${escapeHtml(item.location)} • خامة: <strong class="text-bronze">${escapeHtml(item.material)}</strong></span>
                 </div>
                 <button onclick="App.removeDeliveredAsset(${idx})" class="text-rose-600 font-bold px-1.5">✕</button>
               </div>
@@ -672,7 +809,7 @@
         const mats = currentWorkspace.brandCore?.materials || [];
         if (tags) {
           tags.innerHTML = mats.map(m =>
-            `<span class="px-2.5 py-1 rounded-md bg-stoneBg border border-borderSubtle text-xs font-semibold text-ink">${m}</span>`
+            `<span class="px-2.5 py-1 rounded-md bg-stoneBg border border-borderSubtle text-xs font-semibold text-ink">${escapeHtml(m)}</span>`
           ).join('');
         }
       }
@@ -696,6 +833,8 @@
       }
 
       async function removeDeliveredAsset(idx) {
+        if (!currentWorkspace.assets.delivered[idx] || !confirm('حذف العمل المتسلم من المرجعيات؟')) return;
+        await checkpoint();
         currentWorkspace.assets.delivered.splice(idx, 1);
         await persistWorkspace();
         refreshUI();
@@ -721,6 +860,7 @@
       }
 
       async function saveSettings() {
+        canRestore();
         const cfg = {
           geminiKey: document.getElementById('cfg-gemini-key').value.trim(),
           ghToken: document.getElementById('cfg-gh-token').value.trim(),
@@ -732,21 +872,25 @@
         closeSettingsModal();
         showToast('تم حفظ الإعدادات. جاري التحقق من المزامنة...');
         await init();
+        if (StorageEngine.isGitHubConfigured()) await retrySync();
       }
 
       async function handleForcePull() {
         try {
+          canRestore();
+          if (!confirm('استبدال بيانات الشركة المفتوحة بنسخة GitHub؟ التعديلات المحلية غير المرفوعة هتتحفظ في نسخة الاسترجاع.')) return;
+          restoring = true;
+          await checkpoint();
           const pulled = await StorageEngine.forcePullFromGitHub(currentCompanyId);
-          companies = pulled.companies;
           currentWorkspace = pulled.ws;
-          platformRules = pulled.rules;
+          workspaceOwners.set(currentWorkspace, currentCompanyId);
           renderCompanySelector();
           refreshUI();
           closeSettingsModal();
-          showToast('تم استرجاع كافة البيانات من GitHub بنجاح');
+          showToast('تم استرجاع بيانات الشركة من GitHub');
         } catch (e) {
-          showToast(e.message, true);
-        }
+          showError(e);
+        } finally { restoring = false; }
       }
 
       function openAddCompanyModal() {
@@ -791,9 +935,10 @@
       function showToast(msg, isError = false) {
         const t = document.getElementById('toast');
         t.textContent = msg;
-        t.className = `fixed bottom-5 left-5 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg transition-opacity duration-200 z-50 ${isError ? 'bg-rose-700' : 'bg-ink'}`;
+        t.className = `fixed bottom-5 left-5 right-5 sm:right-auto sm:max-w-lg break-words text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg transition-opacity duration-200 z-50 ${isError ? 'bg-rose-700' : 'bg-ink'}`;
         t.classList.remove('opacity-0');
-        setTimeout(() => t.classList.add('opacity-0'), 3200);
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.add('opacity-0'), isError ? 10000 : 4000);
       }
 
       return {
@@ -803,6 +948,12 @@
         getCurrentWorkspace,
         getPlatformRules,
         persistWorkspace,
+        checkpoint,
+        showError,
+        exportBackup,
+        importBackup,
+        restoreRecovery,
+        retrySync,
         updatePlatformRules,
         switchTab,
         refreshUI,
@@ -819,7 +970,8 @@
       };
     })();
 
-    window.addEventListener('DOMContentLoaded', () => App.init());
+    window.addEventListener('DOMContentLoaded', () => App.init().catch(App.showError));
+    window.addEventListener('unhandledrejection', event => { event.preventDefault(); App.showError(event.reason); });
   </script>
 </body>
 </html>

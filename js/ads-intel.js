@@ -220,7 +220,7 @@ const AdsIntel = (() => {
       renderOfflineAttribution(ws);
       App.showToast('تم تشخيص حملات اليوم وحفظ السجل');
     } catch (e) {
-      App.showToast(e.message, true);
+      App.showError(e);
     } finally {
       btn.disabled = false;
       btn.innerHTML = origHtml;
@@ -274,7 +274,7 @@ const AdsIntel = (() => {
       renderPlatformRules(updated);
       App.showToast('تم تحديث وحفظ أحدث قواعد Meta & Google بنجاح');
     } catch (e) {
-      App.showToast(e.message, true);
+      App.showError(e);
     } finally {
       btn.disabled = false;
       btn.innerHTML = origHtml;
@@ -420,6 +420,8 @@ const AdsIntel = (() => {
 
   async function removeSeason(idx) {
     const ws = App.getCurrentWorkspace();
+    if (!ws.seasons[idx] || !confirm('حذف الموسم؟')) return;
+    await App.checkpoint(ws);
     ws.seasons.splice(idx, 1);
     await App.persistWorkspace();
     App.refreshUI();
