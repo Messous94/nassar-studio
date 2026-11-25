@@ -10,6 +10,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
+  .material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 14px; }
+  .material-card { display: grid; align-content: start; gap: 12px; padding: 16px; border: 1px solid #E6E4DD; border-radius: 12px; overflow-wrap: anywhere; min-width: 0; }
   .reference-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; }
   .reference-card { border: 1px solid #E6E4DD; border-radius: 12px; overflow: hidden; background: #fff; min-width: 0; }
   .reference-preview { display: block; width: 100%; background: #F8F7F4; height: 170px; }
@@ -156,7 +158,7 @@
       </div>
 
       <div class="glass-card rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span id="reference-selection-summary">التوليد من غير صور مختارة</span>
+        <div class="space-y-1"><p id="reference-selection-summary">التوليد من غير صور مختارة</p><p id="material-generation-summary" class="text-muted"></p></div>
         <button onclick="App.switchTab('assets')" class="font-bold text-bronze">اختيار صور للتوليد</button>
       </div>
 
@@ -233,6 +235,7 @@
           </div>
 
           <!-- Reference Image Preview (if generated) -->
+          <div id="post-material-data" class="space-y-2"></div>
           <div id="post-reference-images" class="space-y-2"></div>
           <div id="brief-ref-image-box" class="hidden rounded-xl overflow-hidden border border-borderSubtle">
             <img id="brief-ref-image" src="" alt="صورة ريفرنس" class="w-full h-48 object-cover" />
@@ -288,8 +291,9 @@
                 <textarea id="core-segments" rows="2" class="w-full p-2.5 rounded-lg bg-stoneBg border border-borderSubtle text-ink"></textarea>
               </div>
               <div>
-                <label class="block text-muted font-semibold mb-1">قائمة الخامات / المنتجات (مفصولة بفاصلة)</label>
+                <label class="block text-muted font-semibold mb-1">أسماء الخامات القديمة فقط (مفصولة بفاصلة)</label>
                 <textarea id="core-materials" rows="2" class="w-full p-2.5 rounded-lg bg-stoneBg border border-borderSubtle text-ink"></textarea>
+                <p class="text-[11px] text-muted mt-1">البراند والموديل والمنشأ والمواصفات في كتالوج الخامات داخل الأصول والمرجعيات. الأسماء هنا مش بيانات معتمدة للتوليد.</p>
               </div>
             </div>
           </div>
@@ -355,6 +359,16 @@
         </div>
         <div id="reference-library-grid" class="reference-grid"></div>
       </div>
+      <div class="glass-card rounded-xl p-4 sm:p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="font-bold text-sm">كتالوج الخامات المعتمد</h2><p class="text-xs text-muted mt-1">بيانات مسجّلة ومراجعة منك. المسودات خارج التوليد، والبيانات الناقصة ظاهرة من غير استكمال تلقائي.</p></div><span id="material-catalog-count" class="text-xs"></span></div>
+        <div class="flex flex-wrap gap-2 text-xs"><button onclick="MaterialCatalog.openEditor()" class="px-3 py-2 rounded-lg bg-ink text-white font-bold">إضافة خامة</button><button onclick="MaterialCatalog.importLegacy()" class="px-3 py-2 rounded-lg bg-stoneBg border border-borderSubtle">استيراد الأسماء القديمة كمسودات</button></div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+          <label>بحث<input id="material-search" oninput="MaterialCatalog.render(App.getCurrentWorkspace())" placeholder="اسم أو براند أو موديل أو منشأ" class="block w-full min-w-0 p-2 rounded-lg border border-borderSubtle" /></label>
+          <label>حالة البطاقة<select id="material-status-filter" onchange="MaterialCatalog.render(App.getCurrentWorkspace())" class="block w-full p-2 rounded-lg border border-borderSubtle"><option value="">كل الحالات</option><option value="approved">معتمد</option><option value="draft">مسودة</option></select></label>
+          <label>خامات التوليد<select id="material-scope" onchange="MaterialCatalog.setScope(this.value)" class="block w-full p-2 rounded-lg border border-borderSubtle"><option value="all">كل المعتمد — لحد 8 خامات</option><option value="selected">الخامات المختارة فقط</option><option value="general">محتوى عام بدون مواصفات خامات</option></select></label>
+        </div>
+        <div id="material-catalog-grid" class="material-grid"></div>
+      </div>
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
         <!-- Delivered Projects Reference Log (7 cols) -->
@@ -378,8 +392,8 @@
 
         <!-- Materials Catalog Overview (5 cols) -->
         <div class="lg:col-span-5 glass-card rounded-xl p-5 space-y-3">
-          <h3 class="text-sm font-bold text-ink border-b border-borderSubtle pb-2">كتالوج الخامات / المنتجات المسجلة</h3>
-          <p class="text-xs text-muted">يتم سحب هذه الخامات تلقائياً عند توليد البوستات وبريفات الديزاينر.</p>
+          <h3 class="text-sm font-bold text-ink border-b border-borderSubtle pb-2">أسماء الخامات القديمة</h3>
+          <p class="text-xs text-muted">الأسماء الأصلية محفوظة. اعتماد بيانات كل خامة بيتم من بطاقتها في الكتالوج.</p>
           <div id="assets-materials-tags" class="flex flex-wrap gap-2 pt-1"></div>
         </div>
       </div>
@@ -577,6 +591,25 @@
     </div>
   </div>
 
+  <div id="material-editor" role="dialog" aria-modal="true" aria-labelledby="material-editor-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[92dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
+      <div class="flex justify-between items-center"><h3 id="material-editor-heading" class="font-bold text-sm">بطاقة الخامة</h3><button onclick="MaterialCatalog.closeEditor()" aria-label="إغلاق بطاقة الخامة" class="p-2">✕</button></div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <label class="sm:col-span-2">اسم واضح للبطاقة<input id="material-edit-name" maxlength="160" placeholder="اسم الخامة أو المنتج" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label>البراند<input id="material-edit-brand" maxlength="160" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label>الموديل<input id="material-edit-model" maxlength="160" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label>المنشأ المسجّل<input id="material-edit-origin" maxlength="160" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label>مصدر البيانات<input id="material-edit-source" maxlength="500" placeholder="كتالوج، فاتورة، أو بيانات الشركة" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label>الاستخدامات — استخدام في كل سطر<textarea id="material-edit-uses" rows="3" placeholder="المعلومات اللي عندك بس، لحد 12 سطر" class="block w-full p-2 border border-borderSubtle rounded-lg"></textarea></label>
+        <label>المعلومات المعتمدة — معلومة في كل سطر<textarea id="material-edit-facts" rows="3" placeholder="معلومة دقيقة لكل سطر، لحد 15 معلومة" class="block w-full p-2 border border-borderSubtle rounded-lg"></textarea></label>
+        <label class="sm:col-span-2">ملاحظات داخلية — خارج التوليد<textarea id="material-edit-notes" maxlength="2000" rows="2" class="block w-full p-2 border border-borderSubtle rounded-lg"></textarea></label>
+      </div>
+      <div class="space-y-2"><h4 class="text-xs font-bold">ربط صور من المكتبة — لحد 4 صور</h4><p class="text-[11px] text-muted">ربط الصور بالبطاقة بيحفظ مرجعها. اختيار إرسالها للتوليد منفصل من زر اختيار صور الخامة.</p><div id="material-editor-images" class="space-y-2 max-h-40 overflow-y-auto"></div></div>
+      <p id="material-editor-status" role="status" aria-live="polite" class="text-xs text-amber-800"></p>
+      <div class="flex gap-2 text-xs"><button onclick="MaterialCatalog.saveEditor()" class="px-4 py-2 rounded-lg bg-ink text-white font-bold">حفظ البطاقة</button><button onclick="MaterialCatalog.closeEditor()" class="px-3 py-2 rounded-lg bg-stoneBg">إلغاء</button></div>
+    </div>
+  </div>
+
   <div id="reference-editor" role="dialog" aria-modal="true" aria-labelledby="reference-editor-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
     <div class="bg-white rounded-2xl max-w-xl w-full max-h-[92dvh] overflow-y-auto p-4 sm:p-6 space-y-3">
       <div class="flex items-center justify-between"><h3 id="reference-editor-heading" class="font-bold text-sm">معاينة وبيانات الصورة</h3><button onclick="AssetLibrary.closeEditor()" aria-label="إغلاق معاينة الصورة" class="p-2">✕</button></div>
@@ -628,10 +661,11 @@
   <div id="toast" role="status" aria-live="polite" class="fixed bottom-5 left-5 right-5 sm:right-auto sm:max-w-lg bg-ink text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
 
   <!-- Modular Scripts -->
-  <script src="js/storage.js?v=6"></script>
-  <script src="js/asset-library.js?v=6"></script>
-  <script src="js/ai-engine.js?v=6"></script>
-  <script charset="UTF-8" src="js/content-studio.js?v=6"></script>
+  <script src="js/storage.js?v=7"></script>
+  <script src="js/asset-library.js?v=7"></script>
+  <script src="js/material-catalog.js?v=7"></script>
+  <script src="js/ai-engine.js?v=7"></script>
+  <script charset="UTF-8" src="js/content-studio.js?v=7"></script>
   <script src="js/ads-intel.js?v=5"></script>
 
   <!-- Main Application Controller -->
@@ -658,6 +692,7 @@
 
         renderCompanySelector();
         currentWorkspace = await StorageEngine.loadWorkspace(currentCompanyId);
+        MaterialCatalog.ensure(currentWorkspace);
         workspaceOwners.set(currentWorkspace, currentCompanyId);
         platformRules = await StorageEngine.loadPlatformRules();
         await StorageEngine.refreshSyncStatus(currentCompanyId);
@@ -682,7 +717,7 @@
       }
 
       async function switchWorkspace(companyId) {
-        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy()) {
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy()) {
           document.getElementById('workspace-selector').value = currentCompanyId;
           showToast('استنى لحد ما العملية الحالية تخلص.', true);
           return;
@@ -696,6 +731,7 @@
           try { await persistWorkspace(); }
           catch (error) { if (!error.savedLocally) throw error; showError(error); }
           const workspace = await StorageEngine.loadWorkspace(companyId);
+          MaterialCatalog.ensure(workspace);
           currentCompanyId = companyId;
           currentWorkspace = workspace;
           workspaceOwners.set(workspace, companyId);
@@ -733,6 +769,7 @@
       }
 
       async function persistWorkspace(workspace = currentWorkspace) {
+        MaterialCatalog.ensure(workspace);
         const id = workspaceOwners.get(workspace);
         if (!id) throw new Error('مساحة العمل غير جاهزة للحفظ.');
         const result = await StorageEngine.saveWorkspace(id, workspace);
@@ -776,7 +813,7 @@
       }
 
       function canRestore() {
-        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
       }
 
       async function importBackup(event) {
@@ -793,6 +830,7 @@
           if (!confirm('استبدال بيانات الشركة الحالية بالنسخة الاحتياطية؟ هتتحفظ نسخة من البيانات الحالية للاسترجاع.')) return;
           await checkpoint();
           await StorageEngine.importBackupImages(backupText, id);
+          MaterialCatalog.ensure(workspace);
           currentWorkspace = workspace;
           workspaceOwners.set(workspace, id);
           refreshUI();
@@ -816,6 +854,7 @@
           if (!confirm('استرجاع بيانات الشركة لما قبل آخر حذف أو استبدال؟')) return;
           StorageEngine.validateWorkspace(previous);
           await checkpoint();
+          MaterialCatalog.ensure(previous);
           currentWorkspace = previous;
           workspaceOwners.set(previous, currentCompanyId);
           refreshUI();
@@ -860,6 +899,7 @@
         ContentStudio.renderMemoryAndIdeasView(currentWorkspace);
         renderAssetsView();
         AssetLibrary.render(currentWorkspace);
+        MaterialCatalog.render(currentWorkspace);
         AdsIntel.renderAdsView(currentWorkspace, platformRules);
         AdsIntel.renderReportsView(currentWorkspace);
       }
@@ -959,6 +999,7 @@
           restoring = true; acquired = true;
           await checkpoint();
           const pulled = await StorageEngine.forcePullFromGitHub(currentCompanyId);
+          MaterialCatalog.ensure(pulled.ws);
           currentWorkspace = pulled.ws;
           workspaceOwners.set(currentWorkspace, currentCompanyId);
           renderCompanySelector();

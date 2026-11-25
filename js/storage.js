@@ -373,6 +373,23 @@ const StorageEngine = (() => {
   function validateRules(data) {
     if (!data || !Array.isArray(data.rules) || data.rules.some(r => typeof r !== 'string')) throw new Error('قواعد المنصات غير صالحة.');
   }
+  function validateMaterialRecord(material) {
+    const text = (value, limit) => typeof value === 'string' && value.length <= limit;
+    const lines = (value, count, length) => Array.isArray(value) && value.length <= count && value.every(line => text(line, length) && line.trim());
+    if (!material || typeof material !== 'object' || !/^mat-[a-z0-9-]{4,80}$/.test(material.id)
+      || !text(material.name, 160) || !material.name.trim()
+      || !['brand', 'model', 'origin'].every(key => text(material[key], 160))
+      || !lines(material.uses, 12, 200) || !lines(material.approvedFacts, 15, 500)
+      || !text(material.source, 500) || !text(material.notes, 2000)
+      || !['draft', 'approved'].includes(material.status)
+      || !Array.isArray(material.referenceImages) || material.referenceImages.length > 4) {
+      throw new Error('بطاقة الخامة ناقصة أو غير صالحة. راجع الحقول وحدودها.');
+    }
+    const ids = material.referenceImages.map(ref => validateReferenceMetadata(ref).id);
+    if (new Set(ids).size !== ids.length) throw new Error('صور الخامة فيها تكرار.');
+    return material;
+  }
+
   function validateWorkspace(ws) {
     const object = value => value && typeof value === 'object' && !Array.isArray(value);
     const objects = value => Array.isArray(value) && value.every(object);
@@ -397,6 +414,19 @@ const StorageEngine = (() => {
       || ws.assets.selectedReferenceIds.length > 4 || new Set(ws.assets.selectedReferenceIds).size !== ws.assets.selectedReferenceIds.length
       || ws.assets.selectedReferenceIds.some(id => !(ws.assets.references || []).some(ref => ref.id === id)))) throw new Error('اختيار الصور غير صالح.');
     for (const item of [...ws.calendar, ...ws.ideas]) if (item.referenceImages !== undefined && !Array.isArray(item.referenceImages)) throw new Error('مراجع البوست أو الفكرة غير صالحة.');
+    if (ws.brandCore.materialCatalog !== undefined) {
+      if (!Array.isArray(ws.brandCore.materialCatalog)) throw new Error('كتالوج الخامات غير صالح.');
+      const ids = ws.brandCore.materialCatalog.map(material => validateMaterialRecord(material).id);
+      if (new Set(ids).size !== ids.length) throw new Error('في معرّفات خامات مكررة.');
+    }
+    if (ws.brandCore.materialScope !== undefined && !['all', 'selected', 'general'].includes(ws.brandCore.materialScope)) throw new Error('نطاق خامات التوليد غير صالح.');
+    if (ws.brandCore.selectedMaterialIds !== undefined && (!Array.isArray(ws.brandCore.selectedMaterialIds)
+      || ws.brandCore.selectedMaterialIds.length > 8 || new Set(ws.brandCore.selectedMaterialIds).size !== ws.brandCore.selectedMaterialIds.length
+      || ws.brandCore.selectedMaterialIds.some(id => !(ws.brandCore.materialCatalog || []).some(material => material.id === id && material.status === 'approved')))) throw new Error('اختيار خامات التوليد غير صالح.');
+    for (const item of [...ws.calendar, ...ws.ideas]) if (item.materialSnapshots !== undefined) {
+      if (!Array.isArray(item.materialSnapshots)) throw new Error('مرجع خامة البوست غير صالح.');
+      for (const snapshot of item.materialSnapshots) validateMaterialRecord(snapshot);
+    }
     referenceDescriptors(ws);
     return ws;
   }
@@ -425,6 +455,8 @@ const StorageEngine = (() => {
   }
   function referenceDescriptors(workspace) {
     const all = [...(workspace.assets?.references || []),
+      ...(workspace.brandCore?.materialCatalog || []).flatMap(material => material.referenceImages || []),
+      ...[...(workspace.calendar || []), ...(workspace.ideas || [])].flatMap(item => (item.materialSnapshots || []).flatMap(material => material.referenceImages || [])),
       ...(workspace.calendar || []).flatMap(post => post.referenceImages || []),
       ...(workspace.ideas || []).flatMap(idea => idea.referenceImages || [])];
     const unique = new Map();
@@ -607,6 +639,7 @@ const StorageEngine = (() => {
 
   return {
     MAX_REFERENCE_BYTES,
+    validateMaterialRecord,
     validateWorkspace,
     validateReferenceMetadata,
     validateImageData,
