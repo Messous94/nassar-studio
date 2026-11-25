@@ -438,6 +438,40 @@ const StorageEngine = (() => {
     return revision;
   }
 
+  const PERFORMANCE_METRICS = ['spend', 'impressions', 'clicks', 'inquiries', 'qualified', 'measurements', 'contracts', 'revenue'];
+  function validMetric(value, money) { return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1000000000 && (money ? Math.abs(value * 100 - Math.round(value * 100)) < 0.00001 : Number.isInteger(value))); }
+  function validDate(value) { return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value; }
+  function performanceText(value, max, required = false) { return typeof value === 'string' && value.length <= max && (!required || value.trim().length > 0); }
+  function validatePerformanceDimensions(dimension) {
+    if (!dimension || !['contentKey', 'postTitle', 'angleKey', 'angleName', 'campaignKey', 'campaignName', 'platform', 'adId', 'audienceKey', 'audienceName', 'materialKey', 'materialName'].every(key => performanceText(dimension[key], key === 'angleKey' ? 700 : key === 'postTitle' || key === 'angleName' || key === 'contentKey' ? 500 : 400, !['adId'].includes(key)))) throw new Error('أبعاد تقرير المحتوى ناقصة أو غير صالحة.');
+    return dimension;
+  }
+  function validateContentLink(link) {
+    if (!link || !/^link-[a-z0-9-]{4,80}$/.test(link.id) || typeof link.active !== 'boolean' || !performanceText(link.createdAt, 40) || !performanceText(link.updatedAt, 40)
+      || !performanceText(link.campaignName, 200, true) || !performanceText(link.campaignId, 100) || !performanceText(link.campaignKey, 400, true)
+      || !['Meta', 'Google', 'Other'].includes(link.platform) || !performanceText(link.adId, 100) || !performanceText(link.audience, 200) || !performanceText(link.notes, 2000)
+      || !link.target || !performanceText(link.target.contentKey, 500, true) || !performanceText(link.target.postId, 160) || !performanceText(link.target.publicationId, 160)
+      || !performanceText(link.target.title, 500, true) || !performanceText(link.target.angle, 500, true) || !performanceText(link.target.ideaId, 160) || !performanceText(link.target.segment, 80)
+      || !['published', 'draft'].includes(link.target.state) || !Array.isArray(link.target.materials)
+      || link.target.materials.some(material => !material || !performanceText(material.id, 100, true) || !performanceText(material.name, 200, true))) throw new Error('بيانات ربط الحملة بالمحتوى غير صالحة.');
+    return link;
+  }
+  function validatePerformanceRecord(record) {
+    if (!record || !/^result-[a-z0-9-]{4,80}$/.test(record.id) || !/^link-[a-z0-9-]{4,80}$/.test(record.linkId)
+      || !validDate(record.from) || !validDate(record.to) || record.from > record.to || !['direct', 'allocated'].includes(record.method)
+      || !performanceText(record.allocationKey, 200) || (record.method === 'allocated' && !record.allocationKey.trim())
+      || typeof record.cohortAligned !== 'boolean' || typeof record.voided !== 'boolean' || !performanceText(record.notes, 2000)
+      || !performanceText(record.createdAt, 40) || !performanceText(record.updatedAt, 40) || !record.metrics
+      || PERFORMANCE_METRICS.some(key => !validMetric(record.metrics[key], ['spend', 'revenue'].includes(key)))
+      || PERFORMANCE_METRICS.every(key => record.metrics[key] === null)) throw new Error('أرقام نتائج المحتوى ناقصة أو غير صالحة. الفراغ يفضل غير مسجّل، والصفر نتيجة فعلية.');
+    validatePerformanceDimensions(record.dimensions);
+    if (record.cohortAligned) {
+      const stages = ['inquiries', 'qualified', 'measurements', 'contracts'];
+      for (let i = 0; i < stages.length; i++) for (let j = i + 1; j < stages.length; j++) if (record.metrics[stages[i]] !== null && record.metrics[stages[j]] !== null && record.metrics[stages[j]] > record.metrics[stages[i]]) throw new Error('أرقام نفس الدفعة لازم تمشي من الاستفسارات للمؤهلة للمعاينات للتعاقدات من غير زيادة في مرحلة تالية.');
+    }
+    return record;
+  }
+
   function validateWorkspace(ws) {
     const object = value => value && typeof value === 'object' && !Array.isArray(value);
     const objects = value => Array.isArray(value) && value.every(object);
@@ -497,6 +531,16 @@ const StorageEngine = (() => {
         const ids = post.revisions.map(revision => validatePostRevision(revision).id);
         if (new Set(ids).size !== ids.length) throw new Error('في معرّفات نسخ بوست مكررة.');
       }
+    }
+    if (ws.ads.contentLinks !== undefined) {
+      if (!Array.isArray(ws.ads.contentLinks)) throw new Error('روابط المحتوى بالحملات غير صالحة.');
+      const ids = ws.ads.contentLinks.map(link => validateContentLink(link).id);
+      if (new Set(ids).size !== ids.length) throw new Error('في معرّفات ربط مكررة.');
+    }
+    if (ws.ads.performanceRecords !== undefined) {
+      if (!Array.isArray(ws.ads.performanceRecords)) throw new Error('سجل نتائج المحتوى غير صالح.');
+      const ids = ws.ads.performanceRecords.map(record => validatePerformanceRecord(record).id);
+      if (new Set(ids).size !== ids.length || ws.ads.performanceRecords.some(record => !(ws.ads.contentLinks || []).some(link => link.id === record.linkId))) throw new Error('تسجيل نتيجة مكرر أو مربوط بحملة غير موجودة.');
     }
     referenceDescriptors(ws);
     return ws;
@@ -713,6 +757,10 @@ const StorageEngine = (() => {
 
   return {
     MAX_REFERENCE_BYTES,
+    PERFORMANCE_METRICS,
+    validDate,
+    validateContentLink,
+    validatePerformanceRecord,
     validatePostReview,
     validatePostRevision,
     validatePublication,
@@ -747,5 +795,6 @@ const StorageEngine = (() => {
     forcePullFromGitHub
   };
 })();
+
 
 

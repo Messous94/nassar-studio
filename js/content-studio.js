@@ -93,10 +93,10 @@ const ContentStudio = (() => {
   }
 
   function getSelectedPost() { return App.getCurrentWorkspace()?.calendar?.[selectedPostIndex] || null; }
-  function selectPost(idx) { if (generating || PostWorkshop.isBusy() || !PostWorkshop.canLeave()) return; selectedPostIndex = idx; App.refreshUI(); }
+  function selectPost(idx) { if (generating || ContentPerformance.isBusy() || PostWorkshop.isBusy() || !PostWorkshop.canLeave()) return; selectedPostIndex = idx; App.refreshUI(); }
 
   async function setPostStatus(idx, next, options = {}) {
-    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || ContentPerformance.isBusy() || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const ws = App.getCurrentWorkspace();
     ContentMemory.ensure(ws);
     const post = ws.calendar[idx];
@@ -145,7 +145,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateCalendar() {
-    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || ContentPerformance.isBusy() || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-calendar');
     const orig = btn.innerHTML;
     const mode = document.getElementById('calendar-generation-mode').value;
@@ -173,7 +173,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateSinglePost() {
-    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || ContentPerformance.isBusy() || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-single');
     const orig = btn.innerHTML;
     const noteEl = document.getElementById('single-post-note');
@@ -198,7 +198,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateRefImage() {
-    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || ContentPerformance.isBusy() || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const ws = App.getCurrentWorkspace();
     const post = ws.calendar[selectedPostIndex];
     if (!post) return;
@@ -270,7 +270,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateIdeas() {
-    if (generating || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || ContentPerformance.isBusy() || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-ideas');
     const orig = btn.innerHTML;
     try {
@@ -297,6 +297,7 @@ const ContentStudio = (() => {
 
   return { getSelectedPost, isGenerating, renderCalendarView, renderMemoryAndIdeasView, selectPost, setPostStatus, excludeIdea, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
 })();
+
 
 
 

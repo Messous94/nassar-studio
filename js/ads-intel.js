@@ -331,7 +331,7 @@ const AdsIntel = (() => {
     const totalOfflineClients = sales.reduce((acc, s) => acc + (s.count || 0), 0);
     const totalRevenue = sales.reduce((acc, s) => acc + (s.revenue || 0), 0);
 
-    const realCAC = totalOfflineClients > 0 ? Math.round(totalSpend / totalOfflineClients) : 0;
+    const realCAC = totalOfflineClients > 0 ? Math.round(totalSpend / totalOfflineClients) : null;
     const roas = totalSpend > 0 && totalRevenue > 0 ? (totalRevenue / totalSpend).toFixed(2) + 'x' : '-';
 
     const cacEl = document.getElementById('metric-real-cac');
@@ -442,6 +442,9 @@ const AdsIntel = (() => {
       .replace(/"/g, '&quot;');
   }
 
+  function getCampaignNames(ws) {
+    return [...new Set([...parsedTodayRows, ...(ws.ads?.dailyLogs || []).flatMap(log => log.rows || [])].map(row => String(row.campaignName || '').trim()).filter(Boolean))];
+  }
   return {
     handleCSVUpload,
     addManualCampaignRow,
@@ -450,8 +453,10 @@ const AdsIntel = (() => {
     addOfflineSaleRecord,
     renderAdsView,
     renderReportsView,
+    getCampaignNames,
     addSeason,
     removeSeason,
     copyExecutiveReport
   };
 })();
+
