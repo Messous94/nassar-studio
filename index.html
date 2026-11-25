@@ -10,6 +10,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
+  .publication-card { display: grid; gap: 10px; padding: 16px; border: 1px solid #E6E4DD; border-radius: 12px; min-width: 0; overflow-wrap: anywhere; }
+  .publication-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
   .material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 14px; }
   .material-card { display: grid; align-content: start; gap: 12px; padding: 16px; border: 1px solid #E6E4DD; border-radius: 12px; overflow-wrap: anywhere; min-width: 0; }
   .reference-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; }
@@ -235,6 +237,8 @@
           </div>
 
           <!-- Reference Image Preview (if generated) -->
+          <p id="brief-publication-note" class="text-xs text-muted"></p>
+          <p id="brief-exclusion-reason" class="text-xs text-rose-800"></p>
           <div id="post-material-data" class="space-y-2"></div>
           <div id="post-reference-images" class="space-y-2"></div>
           <div id="brief-ref-image-box" class="hidden rounded-xl overflow-hidden border border-borderSubtle">
@@ -246,6 +250,11 @@
             <i class="fa-solid fa-image text-bronze ml-1.5"></i>توليد صورة ريفرنس مقترحة (Google API)
           </button>
         </div>
+      </div>
+      <div class="glass-card rounded-xl p-4 sm:p-5 space-y-4">
+        <div class="flex flex-wrap justify-between items-center gap-3"><div><h2 class="font-bold text-sm">سجل المنشور</h2><p class="text-xs text-muted mt-1">تسجيل المنشورات الفعلية وتاريخها وصورها وزاويتها. الاعتماد مش نشر، واستبدال الكاليندر مايمسحش السجل.</p></div><span id="publication-history-count" class="text-xs"></span></div>
+        <div class="flex flex-wrap gap-2 text-xs"><button onclick="ContentMemory.openPublish()" class="px-3 py-2 rounded-lg bg-ink text-white font-bold">تسجيل منشور قديم يدويًا</button><input id="publication-search" aria-label="بحث في سجل المنشور" oninput="ContentMemory.render(App.getCurrentWorkspace())" placeholder="بحث بالعنوان أو الزاوية أو التاريخ" class="min-w-0 flex-1 p-2 rounded-lg border border-borderSubtle" /><select id="publication-filter" aria-label="حالة تسجيل النشر" onchange="ContentMemory.render(App.getCurrentWorkspace())" class="p-2 rounded-lg border border-borderSubtle"><option value="active">المنشور المسجّل</option><option value="voided">التسجيلات الملغية</option><option value="all">كل التسجيلات</option></select></div>
+        <div id="publication-history-grid" class="publication-grid"></div>
       </div>
     </section>
 
@@ -591,6 +600,30 @@
     </div>
   </div>
 
+  <div id="publication-editor" role="dialog" aria-modal="true" aria-labelledby="publication-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[92dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
+      <div class="flex items-center justify-between"><h3 id="publication-heading" class="font-bold text-sm">تسجيل النشر الفعلي</h3><button onclick="ContentMemory.closePublish()" aria-label="إغلاق تسجيل النشر" class="p-2">✕</button></div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <label>عنوان المنشور<input id="publication-edit-title" maxlength="500" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label>الفكرة أو الزاوية<input id="publication-edit-angle" maxlength="500" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label>تاريخ النشر<input id="publication-edit-date" type="date" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label>المنصة<input id="publication-edit-channel" maxlength="80" placeholder="Facebook / Instagram" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label class="sm:col-span-2">رابط المنشور — اختياري<input id="publication-edit-url" type="url" maxlength="2000" placeholder="https://..." class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label class="sm:col-span-2">الخامة كما ظهرت في المنشور<input id="publication-edit-material" maxlength="2000" class="block w-full min-w-0 p-2 border border-borderSubtle rounded-lg" /></label>
+        <label class="sm:col-span-2">النص المنشور فعليًا<textarea id="publication-edit-copy" rows="5" maxlength="50000" class="block w-full p-2 border border-borderSubtle rounded-lg"></textarea></label>
+      </div>
+      <div class="space-y-2"><h4 class="text-xs font-bold">الصور المنشورة فعليًا — من مكتبة المرجعيات</h4><p class="text-[11px] text-muted">اختار لحد 10 صور. الصور اللي اتبعتت للتوليد مش صور منشورة تلقائيًا.</p><div id="publication-edit-images" class="space-y-2 max-h-40 overflow-y-auto"></div></div>
+      <p id="publication-editor-status" role="status" aria-live="polite" class="text-xs text-muted"></p>
+      <div class="flex gap-2 text-xs"><button onclick="ContentMemory.savePublication()" class="px-4 py-2 rounded-lg bg-ink text-white font-bold">حفظ تسجيل النشر</button><button onclick="ContentMemory.closePublish()" class="px-3 py-2 rounded-lg bg-stoneBg">إلغاء</button></div>
+    </div>
+  </div>
+  <div id="exclusion-editor" role="dialog" aria-modal="true" aria-labelledby="exclusion-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 space-y-3"><h3 id="exclusion-heading" class="text-sm font-bold"></h3><label class="block text-xs">سبب الاستبعاد<textarea id="exclusion-reason" maxlength="2000" rows="4" placeholder="مثال: معلومة غلط، صياغة ضعيفة، أو زاوية اتكررت كتير" class="block w-full p-2 border border-borderSubtle rounded-lg"></textarea></label><p class="text-xs text-muted">السبب بيتحفظ مع الفكرة وبيتبعت في التوليد التالي لتجنب نفس المشكلة.</p><div class="flex gap-2 text-xs"><button onclick="ContentMemory.saveExclusion()" class="px-4 py-2 rounded-lg bg-ink text-white">حفظ الاستبعاد</button><button onclick="ContentMemory.closeExclusion()" class="px-3 py-2 rounded-lg bg-stoneBg">إلغاء</button></div></div>
+  </div>
+  <div id="saturation-editor" role="dialog" aria-modal="true" aria-labelledby="saturation-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 space-y-3"><h3 id="saturation-heading" class="text-sm font-bold"></h3><label class="block text-xs">نسبة التشبع من 0 لحد 100<input id="saturation-value" type="number" min="0" max="100" step="1" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">سبب التعديل — اختياري<textarea id="saturation-reason" rows="2" maxlength="500" class="block w-full p-2 border border-borderSubtle rounded-lg"></textarea></label><p class="text-xs text-muted">تعديل النسبة مايلغيش استبعاد الفكرة يدويًا. إعادة الإتاحة متاحة من بطاقة الفكرة.</p><div class="flex gap-2 text-xs"><button onclick="ContentMemory.saveSaturation()" class="px-4 py-2 rounded-lg bg-ink text-white">حفظ التشبع</button><button onclick="ContentMemory.closeSaturation()" class="px-3 py-2 rounded-lg bg-stoneBg">إلغاء</button></div></div>
+  </div>
+
   <div id="material-editor" role="dialog" aria-modal="true" aria-labelledby="material-editor-heading" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
     <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[92dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
       <div class="flex justify-between items-center"><h3 id="material-editor-heading" class="font-bold text-sm">بطاقة الخامة</h3><button onclick="MaterialCatalog.closeEditor()" aria-label="إغلاق بطاقة الخامة" class="p-2">✕</button></div>
@@ -661,11 +694,12 @@
   <div id="toast" role="status" aria-live="polite" class="fixed bottom-5 left-5 right-5 sm:right-auto sm:max-w-lg bg-ink text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
 
   <!-- Modular Scripts -->
-  <script src="js/storage.js?v=7"></script>
-  <script src="js/asset-library.js?v=7"></script>
-  <script src="js/material-catalog.js?v=7"></script>
-  <script src="js/ai-engine.js?v=7"></script>
-  <script charset="UTF-8" src="js/content-studio.js?v=7"></script>
+  <script src="js/storage.js?v=8"></script>
+  <script src="js/asset-library.js?v=8"></script>
+  <script src="js/material-catalog.js?v=8"></script>
+  <script src="js/content-memory.js?v=8"></script>
+  <script src="js/ai-engine.js?v=8"></script>
+  <script charset="UTF-8" src="js/content-studio.js?v=8"></script>
   <script src="js/ads-intel.js?v=5"></script>
 
   <!-- Main Application Controller -->
@@ -693,6 +727,7 @@
         renderCompanySelector();
         currentWorkspace = await StorageEngine.loadWorkspace(currentCompanyId);
         MaterialCatalog.ensure(currentWorkspace);
+        ContentMemory.ensure(currentWorkspace);
         workspaceOwners.set(currentWorkspace, currentCompanyId);
         platformRules = await StorageEngine.loadPlatformRules();
         await StorageEngine.refreshSyncStatus(currentCompanyId);
@@ -717,7 +752,7 @@
       }
 
       async function switchWorkspace(companyId) {
-        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy()) {
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy()) {
           document.getElementById('workspace-selector').value = currentCompanyId;
           showToast('استنى لحد ما العملية الحالية تخلص.', true);
           return;
@@ -732,6 +767,7 @@
           catch (error) { if (!error.savedLocally) throw error; showError(error); }
           const workspace = await StorageEngine.loadWorkspace(companyId);
           MaterialCatalog.ensure(workspace);
+          ContentMemory.ensure(workspace);
           currentCompanyId = companyId;
           currentWorkspace = workspace;
           workspaceOwners.set(workspace, companyId);
@@ -770,6 +806,7 @@
 
       async function persistWorkspace(workspace = currentWorkspace) {
         MaterialCatalog.ensure(workspace);
+        ContentMemory.ensure(workspace);
         const id = workspaceOwners.get(workspace);
         if (!id) throw new Error('مساحة العمل غير جاهزة للحفظ.');
         const result = await StorageEngine.saveWorkspace(id, workspace);
@@ -813,7 +850,7 @@
       }
 
       function canRestore() {
-        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
       }
 
       async function importBackup(event) {
@@ -831,6 +868,7 @@
           await checkpoint();
           await StorageEngine.importBackupImages(backupText, id);
           MaterialCatalog.ensure(workspace);
+          ContentMemory.ensure(workspace);
           currentWorkspace = workspace;
           workspaceOwners.set(workspace, id);
           refreshUI();
@@ -855,6 +893,7 @@
           StorageEngine.validateWorkspace(previous);
           await checkpoint();
           MaterialCatalog.ensure(previous);
+          ContentMemory.ensure(previous);
           currentWorkspace = previous;
           workspaceOwners.set(previous, currentCompanyId);
           refreshUI();
@@ -900,6 +939,7 @@
         renderAssetsView();
         AssetLibrary.render(currentWorkspace);
         MaterialCatalog.render(currentWorkspace);
+        ContentMemory.render(currentWorkspace);
         AdsIntel.renderAdsView(currentWorkspace, platformRules);
         AdsIntel.renderReportsView(currentWorkspace);
       }
@@ -1000,6 +1040,7 @@
           await checkpoint();
           const pulled = await StorageEngine.forcePullFromGitHub(currentCompanyId);
           MaterialCatalog.ensure(pulled.ws);
+          ContentMemory.ensure(pulled.ws);
           currentWorkspace = pulled.ws;
           workspaceOwners.set(currentWorkspace, currentCompanyId);
           renderCompanySelector();
@@ -1096,4 +1137,5 @@
   </script>
 </body>
 </html>
+
 

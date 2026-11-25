@@ -77,6 +77,8 @@ const ContentStudio = (() => {
       document.getElementById('brief-badge').textContent = `بوست #${String(selectedPostIndex + 1).padStart(2, '0')} • ${post.segment || 'B2C'}`;
       document.getElementById('brief-title').textContent = post.title || '';
       document.getElementById('brief-copy').value = post.copy || '';
+      document.getElementById('brief-publication-note').textContent = ContentMemory.activeForPost(ws, post.id) ? 'تعديل النص في الكاليندر ما يغيّرش النسخة المسجّلة في سجل المنشور.' : '';
+      document.getElementById('brief-exclusion-reason').textContent = post.exclusionReason ? 'آخر سبب استبعاد مسجّل: ' + post.exclusionReason : '';
       document.getElementById('brief-material').textContent = post.material || '-';
       document.getElementById('brief-colors').textContent = post.colorPalette || '-';
       document.getElementById('brief-mood').textContent = post.mood || '-';
@@ -92,36 +94,25 @@ const ContentStudio = (() => {
   function selectPost(idx) { selectedPostIndex = idx; App.refreshUI(); }
 
   async function setPostStatus(idx, next) {
+    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const ws = App.getCurrentWorkspace();
+    ContentMemory.ensure(ws);
     const post = ws.calendar[idx];
     if (!post || !POST_STATUSES.includes(next)) return;
-
-    const match = ws.ideas.find(idea => AIEngine.matchesIdea(idea, post));
+    if (next === 'اترفع') { App.refreshUI(); ContentMemory.openPublish(idx); return; }
+    if (ContentMemory.activeForPost(ws, post.id)) { App.showError(new Error('البوست مسجّل منشور. استخدم سجل المنشور لإلغاء تسجيل النشر الأول.')); App.refreshUI(); return; }
     const excludedStatus = EXCLUSION_OPTIONS[next];
-    if (excludedStatus) {
-      if (match) {
-        match.status = excludedStatus;
-      } else {
-        ws.ideas.unshift({
-          id: post.ideaId && post.ideaId !== 'new' ? post.ideaId : 'idea-' + Date.now(),
-          title: post.ideaTitle || post.title,
-          insight: post.copy || post.title,
-          segment: post.segment || 'B2C',
-          saturation: 0,
-          status: excludedStatus
-        });
-      }
-    } else if (next === 'معتمد' && !post.saturationCounted) {
-      post.saturationCounted = true;
-      if (match && !AIEngine.exclusionLabel(match)) {
-        match.saturation = Math.min(100, (match.saturation || 0) + 25);
-        match.status = 'approved';
-      } else if (!match && post.ideaTitle) {
-        ws.ideas.unshift({ id: 'idea-' + Date.now(), title: post.ideaTitle, insight: post.title, segment: post.segment || 'B2C', saturation: 25, status: 'approved' });
+    if (excludedStatus) { App.refreshUI(); ContentMemory.openExclusion('post', idx, excludedStatus); return; }
+    let match = ws.ideas.find(idea => AIEngine.matchesIdea(idea, post));
+    if (next === 'معتمد') {
+      if (match && !AIEngine.exclusionLabel(match)) match.status = 'approved';
+      else if (!match && post.ideaTitle) {
+        match = { id: 'idea-' + crypto.randomUUID(), title: post.ideaTitle, insight: post.title, segment: post.segment || 'B2C', saturation: 0, saturationBase: 0, status: 'approved' };
+        ws.ideas.unshift(match); post.ideaId = match.id;
       }
     }
     post.status = next;
-    await saveStatusChange(excludedStatus ? 'تم استبعاد الزاوية من التوليد' : 'تم تغيير الحالة إلى ' + next);
+    await saveStatusChange('تم تغيير الحالة إلى ' + next);
   }
 
   async function saveStatusChange(message) {
@@ -135,11 +126,8 @@ const ContentStudio = (() => {
   }
 
   async function excludeIdea(i, status) {
-    const idea = App.getCurrentWorkspace().ideas[i];
-    if (!idea || !Object.values(EXCLUSION_OPTIONS).includes(status)) return;
-
-    idea.status = status;
-    await saveStatusChange('تم استبعاد الزاوية من التوليد');
+    if (!Object.values(EXCLUSION_OPTIONS).includes(status)) return;
+    ContentMemory.openExclusion('idea', i, status);
   }
 
   async function saveEditedCopy() {
@@ -152,7 +140,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateCalendar() {
-    if (generating || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-calendar');
     const orig = btn.innerHTML;
     const mode = document.getElementById('calendar-generation-mode').value;
@@ -166,7 +154,7 @@ const ContentStudio = (() => {
       const references = await AssetLibrary.prepareReferences(ws);
       const posts = await AIEngine.generateCalendar8(ws, references);
       if (!Array.isArray(posts) || posts.length !== 8 || posts.some(p => !p || typeof p.title !== 'string')) throw new Error('رد التوليد غير مكتمل. الكاليندر الحالية لم تتغير.');
-      const generated = posts.map(p => ({ ...p, status: 'مسودة', saturationCounted: false, referenceImage: '' }));
+      const generated = posts.map(p => ({ ...p, id: 'post-' + crypto.randomUUID(), status: 'مسودة', saturationCounted: false, referenceImage: '' }));
       await App.checkpoint(ws);
       selectedPostIndex = mode === 'replace' ? 0 : ws.calendar.length;
       ws.calendar = mode === 'replace' ? generated : [...ws.calendar, ...generated];
@@ -178,7 +166,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateSinglePost() {
-    if (generating || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-single');
     const orig = btn.innerHTML;
     const noteEl = document.getElementById('single-post-note');
@@ -190,7 +178,7 @@ const ContentStudio = (() => {
       const ws = App.getCurrentWorkspace();
       const references = await AssetLibrary.prepareReferences(ws);
       const post = await AIEngine.generateSinglePost(ws, note, references);
-      ws.calendar.unshift({ ...post, status: 'مسودة', saturationCounted: false, referenceImage: '' });
+      ws.calendar.unshift({ ...post, id: 'post-' + crypto.randomUUID(), status: 'مسودة', saturationCounted: false, referenceImage: '' });
       if (noteEl) noteEl.value = '';
       selectedPostIndex = 0;
       await App.persistWorkspace();
@@ -201,7 +189,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateRefImage() {
-    if (generating || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const ws = App.getCurrentWorkspace();
     const post = ws.calendar[selectedPostIndex];
     if (!post) return;
@@ -259,6 +247,8 @@ const ContentStudio = (() => {
         </div>
         <h4 class="font-bold text-ink">${escapeHtml(idea.title)}</h4>
         <p class="text-[11px] text-muted">${escapeHtml(idea.insight || '')}</p>
+        ${excluded ? `<p class="text-xs text-rose-800">سبب الاستبعاد: ${escapeHtml(idea.exclusionReason || 'غير مسجّل في النسخة القديمة')}</p><div class="flex flex-wrap gap-2 text-xs"><button onclick="ContentMemory.openExclusion('idea', ${i}, '${idea.status}')">تعديل السبب</button><button onclick="ContentMemory.reopenIdea(${i})">إعادة إتاحة الفكرة</button></div>` : ''}
+        <button onclick="ContentMemory.openSaturation(${i})" class="text-[11px] text-bronze font-bold">تعديل التشبع (${idea.saturation || 0}%)</button>
         ${excluded ? '' : `
           ${pend ? `<button onclick="ContentStudio.approveIdea(${i})" class="w-full py-1.5 rounded-lg font-bold bg-ink text-white">اعتماد ✓</button>`
             : `<div class="sat-bar"><div class="sat-fill ${getSaturationColor(idea.saturation)}" style="width:${idea.saturation}%"></div></div>`}
@@ -271,7 +261,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateIdeas() {
-    if (generating || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || ContentMemory.isBusy() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-ideas');
     const orig = btn.innerHTML;
     try {
@@ -287,8 +277,8 @@ const ContentStudio = (() => {
     finally { generating = false; btn.disabled = false; btn.innerHTML = orig; }
   }
 
-  async function approveIdea(i) { const ws = App.getCurrentWorkspace(); if (ws.ideas[i]?.status !== 'pending') return; ws.ideas[i].status = 'approved'; ws.ideas[i].saturation = 0; await App.persistWorkspace(); App.refreshUI(); }
-  async function deleteIdea(i) { const ws = App.getCurrentWorkspace(); if (!ws.ideas[i] || AIEngine.exclusionLabel(ws.ideas[i])) return; if (!confirm('حذف الفكرة من المكتبة؟')) return; await App.checkpoint(ws); ws.ideas.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
+  async function approveIdea(i) { const ws = App.getCurrentWorkspace(); if (ws.ideas[i]?.status !== 'pending') return; ws.ideas[i].status = 'approved'; await App.persistWorkspace(); App.refreshUI(); }
+  async function deleteIdea(i) { const ws = App.getCurrentWorkspace(); if (!ws.ideas[i] || AIEngine.exclusionLabel(ws.ideas[i])) return; if (ContentMemory.hasIdeaHistory(ws, ws.ideas[i].id)) { App.showError(new Error('الفكرة مرتبطة بسجل المنشور. تقدر تعدّل تشبعها أو تلغي تسجيل النشر من السجل.')); return; } if (!confirm('حذف الفكرة من المكتبة؟')) return; await App.checkpoint(ws); ws.ideas.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
   async function addRule() { const inp = document.getElementById('new-rule-input'); if (!inp.value.trim()) return; const ws = App.getCurrentWorkspace(); if (ws.brandCore.rules.length >= 15) { App.showToast('الحد الأقصى 15 قاعدة', true); return; } ws.brandCore.rules.push(inp.value.trim()); inp.value = ''; await App.persistWorkspace(); App.refreshUI(); }
   async function removeRule(i) { const ws = App.getCurrentWorkspace(); if (!ws.brandCore.rules[i] || !confirm('حذف قاعدة الكتابة؟')) return; await App.checkpoint(ws); ws.brandCore.rules.splice(i, 1); await App.persistWorkspace(); App.refreshUI(); }
   async function addOffer() { const t = document.getElementById('new-offer-title').value.trim(), s = document.getElementById('new-offer-segment').value, d = document.getElementById('new-offer-details').value.trim(); if (!t || !d) return; const ws = App.getCurrentWorkspace(); ws.brandCore.offers.push({ id: 'off-' + Date.now(), title: t, segment: s, details: d }); document.getElementById('new-offer-title').value = ''; document.getElementById('new-offer-details').value = ''; await App.persistWorkspace(); App.refreshUI(); }
@@ -298,4 +288,5 @@ const ContentStudio = (() => {
 
   return { isGenerating, renderCalendarView, renderMemoryAndIdeasView, selectPost, setPostStatus, excludeIdea, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
 })();
+
 

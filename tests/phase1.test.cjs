@@ -1,7 +1,7 @@
 // Dependency-free regression tests. Run: node tests/phase1.test.cjs
 const fs = require('node:fs');
 const path = require('node:path');
-const sources = Object.fromEntries(['index.html','js/storage.js','js/content-studio.js','js/ads-intel.js','js/material-catalog.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
+const sources = Object.fromEntries(['index.html','js/storage.js','js/content-studio.js','js/ads-intel.js','js/material-catalog.js','js/content-memory.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
 
 const assert = (condition, message = 'Assertion failed') => { if (!condition) throw new Error(message); };
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -98,7 +98,9 @@ function harness() {
     const appProxy={};
     Object.assign(scope,{StorageEngine:storage,App:appProxy,AIEngine:api,AssetLibrary:{isBusy:()=>false,render(){},renderPostReferences(){},prepareReferences:async()=>[]}});
     scope.ContentStudio = {};
+    scope.ContentMemory = {};
     scope.MaterialCatalog=evaluate(sources['js/material-catalog.js'],'MaterialCatalog');
+    Object.assign(scope.ContentMemory, evaluate(sources['js/content-memory.js'],'ContentMemory'));
     studio=evaluate(sources['js/content-studio.js'],'ContentStudio');
     Object.assign(scope.ContentStudio, studio);
     ads=evaluate(sources['js/ads-intel.js'],'AdsIntel');
@@ -226,3 +228,4 @@ if (require.main === module) runTests().then(results => console.log(results.leng
 
 
 module.exports = { harness, runTests, sources, assert };
+

@@ -371,7 +371,7 @@ const AdsIntel = (() => {
   function renderReportsView(ws) {
     const posts = ws.calendar || [];
     const approvedCount = posts.filter(p => ['معتمد', 'اتعمل', 'اترفع'].includes(p.status)).length;
-    const publishedCount = posts.filter(p => p.status === 'اترفع').length;
+    const publishedCount = (ws.publicationHistory || []).filter(entry => !entry.voided).length;
     const approvedIdeas = (ws.ideas || []).filter(i => i.status === 'approved');
     const topSaturated = [...approvedIdeas].sort((a, b) => b.saturation - a.saturation)[0];
 
@@ -379,7 +379,7 @@ const AdsIntel = (() => {
     if (summaryEl) {
       summaryEl.innerHTML = `
         <p>• <strong>هدف الفترة:</strong> ${escapeHtml(ws.goal?.objective || 'غير محدد')}</p>
-        <p>• <strong>إنجاز الكاليندر:</strong> تم اعتماد <strong>${approvedCount}</strong> بوستات من أصل <strong>${posts.length}</strong>، وتم نشر <strong>${publishedCount}</strong> بالفعل.</p>
+        <p>• <strong>إنجاز الكاليندر:</strong> تم اعتماد <strong>${approvedCount}</strong> بوستات من أصل <strong>${posts.length}</strong>، وسجل المنشور فيه <strong>${publishedCount}</strong> منشور مسجّل.</p>
         <p>• <strong>أكثر زاوية تم التركيز عليها:</strong> ${topSaturated ? `${escapeHtml(topSaturated.title)} (تشبع ${topSaturated.saturation}%)` : 'لا يوجد بعد'}</p>
         <p>• <strong>الأعمال المتسلمة المسجلة كمرجع:</strong> ${(ws.assets?.delivered || []).length} مشروع.</p>
       `;

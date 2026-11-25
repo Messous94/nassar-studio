@@ -238,7 +238,14 @@ const StorageEngine = (() => {
     }
     if (!res.ok) throw githubError(res.status);
     const json = await res.json();
-    try { return { exists: true, data: JSON.parse(fromBase64Unicode(json.content)), sha: json.sha }; }
+    try {
+      if (json.encoding === 'none' || (json.size > 1024 * 1024 && !json.content)) {
+        const raw = await request(url, { headers: { ...headers, Accept: 'application/vnd.github.raw+json' } });
+        if (!raw.ok) throw githubError(raw.status);
+        return { exists: true, data: await raw.json(), sha: json.sha };
+      }
+      return { exists: true, data: JSON.parse(fromBase64Unicode(json.content)), sha: json.sha };
+    }
     catch { throw new Error('ملف البيانات على GitHub غير صالح. نسختك المحلية محفوظة.'); }
   }
 
@@ -390,6 +397,26 @@ const StorageEngine = (() => {
     return material;
   }
 
+  function validatePublication(entry) {
+    const text = (value, max) => typeof value === 'string' && value.length <= max;
+    if (!entry || typeof entry !== 'object' || !/^pub-[a-z0-9-]{4,80}$/.test(entry.id)
+      || !text(entry.sourcePostId, 160) || !text(entry.ideaId, 160) || !entry.ideaId
+      || !text(entry.title, 500) || !entry.title.trim() || !text(entry.ideaTitle, 500) || !entry.ideaTitle.trim()
+      || !text(entry.copy, 50000) || !text(entry.material, 2000) || !text(entry.segment, 80)
+      || !text(entry.channel, 80) || !entry.channel.trim() || !text(entry.url, 2000)
+      || (entry.url && !/^https?:\/\/[^\s]+$/i.test(entry.url))
+      || !text(entry.publishedAt, 10) || (entry.publishedAt && (!/^\d{4}-\d{2}-\d{2}$/.test(entry.publishedAt) || !Number.isFinite(Date.parse(entry.publishedAt + 'T00:00:00Z')) || new Date(entry.publishedAt + 'T00:00:00Z').toISOString().slice(0, 10) !== entry.publishedAt))
+      || (!entry.publishedAt && entry.legacy !== true)
+      || typeof entry.voided !== 'boolean' || typeof entry.legacy !== 'boolean' || typeof entry.countsTowardSaturation !== 'boolean'
+      || !text(entry.recordedAt, 40) || !text(entry.updatedAt, 40) || !text(entry.previousStatus, 40)
+      || !Array.isArray(entry.publishedImages) || entry.publishedImages.length > 10
+      || !Array.isArray(entry.referenceImages) || !Array.isArray(entry.materialSnapshots)) throw new Error('بيانات سجل النشر ناقصة أو غير صالحة.');
+    for (const image of [...entry.publishedImages, ...entry.referenceImages]) validateReferenceMetadata(image);
+    if (new Set(entry.publishedImages.map(image => image.id)).size !== entry.publishedImages.length) throw new Error('صور المنشور فيها تكرار.');
+    for (const material of entry.materialSnapshots) validateMaterialRecord(material);
+    return entry;
+  }
+
   function validateWorkspace(ws) {
     const object = value => value && typeof value === 'object' && !Array.isArray(value);
     const objects = value => Array.isArray(value) && value.every(object);
@@ -427,6 +454,21 @@ const StorageEngine = (() => {
       if (!Array.isArray(item.materialSnapshots)) throw new Error('مرجع خامة البوست غير صالح.');
       for (const snapshot of item.materialSnapshots) validateMaterialRecord(snapshot);
     }
+    if (ws.contentMemoryVersion !== undefined && ws.contentMemoryVersion !== 1) throw new Error('إصدار ذاكرة المحتوى غير مدعوم.');
+    if (ws.publicationHistory !== undefined) {
+      if (!Array.isArray(ws.publicationHistory)) throw new Error('سجل المنشور غير صالح.');
+      const ids = ws.publicationHistory.map(entry => validatePublication(entry).id);
+      if (new Set(ids).size !== ids.length) throw new Error('في تسجيل نشر مكرر.');
+      const activePosts = ws.publicationHistory.filter(entry => !entry.voided && entry.sourcePostId).map(entry => entry.sourcePostId);
+      if (new Set(activePosts).size !== activePosts.length) throw new Error('البوست مسجّل منشور أكتر من مرة.');
+    }
+    for (const idea of ws.ideas) {
+      if (idea.saturationBase !== undefined && !Number.isSafeInteger(idea.saturationBase)) throw new Error('أساس التشبع غير صالح.');
+      if (idea.saturation !== undefined && (!Number.isInteger(idea.saturation) || idea.saturation < 0 || idea.saturation > 100)) throw new Error('نسبة التشبع غير صالحة.');
+      if (idea.exclusionReason !== undefined && (typeof idea.exclusionReason !== 'string' || idea.exclusionReason.length > 2000)) throw new Error('سبب الاستبعاد غير صالح.');
+      if (idea.saturationAdjustments !== undefined && (!Array.isArray(idea.saturationAdjustments) || idea.saturationAdjustments.some(item => !item || !Number.isInteger(item.value) || item.value < 0 || item.value > 100 || !Number.isInteger(item.before) || item.before < 0 || item.before > 100 || typeof item.reason !== 'string' || item.reason.length > 500 || typeof item.at !== 'string'))) throw new Error('سجل تعديل التشبع غير صالح.');
+      if (idea.exclusionHistory !== undefined && (!Array.isArray(idea.exclusionHistory) || idea.exclusionHistory.some(item => !item || !['rejected', 'saturated'].includes(item.status) || typeof item.reason !== 'string' || !item.reason.trim() || item.reason.length > 2000 || typeof item.at !== 'string'))) throw new Error('سجل أسباب الاستبعاد غير صالح.');
+    }
     referenceDescriptors(ws);
     return ws;
   }
@@ -454,7 +496,10 @@ const StorageEngine = (() => {
     return ref;
   }
   function referenceDescriptors(workspace) {
+    const history = workspace.publicationHistory || [];
     const all = [...(workspace.assets?.references || []),
+      ...history.flatMap(entry => [...(entry.publishedImages || []), ...(entry.referenceImages || [])]),
+      ...history.flatMap(entry => (entry.materialSnapshots || []).flatMap(material => material.referenceImages || [])),
       ...(workspace.brandCore?.materialCatalog || []).flatMap(material => material.referenceImages || []),
       ...[...(workspace.calendar || []), ...(workspace.ideas || [])].flatMap(item => (item.materialSnapshots || []).flatMap(material => material.referenceImages || [])),
       ...(workspace.calendar || []).flatMap(post => post.referenceImages || []),
@@ -639,6 +684,7 @@ const StorageEngine = (() => {
 
   return {
     MAX_REFERENCE_BYTES,
+    validatePublication,
     validateMaterialRecord,
     validateWorkspace,
     validateReferenceMetadata,
@@ -670,3 +716,4 @@ const StorageEngine = (() => {
     forcePullFromGitHub
   };
 })();
+
