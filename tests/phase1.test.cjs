@@ -1,7 +1,7 @@
 // Dependency-free regression tests. Run: node tests/phase1.test.cjs
 const fs = require('node:fs');
 const path = require('node:path');
-const sources = Object.fromEntries(['index.html','js/storage.js','js/content-studio.js','js/ads-intel.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
+const sources = Object.fromEntries(['index.html','js/storage.js','js/content-studio.js','js/ads-intel.js','js/material-catalog.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
 
 const assert = (condition, message = 'Assertion failed') => { if (!condition) throw new Error(message); };
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -30,6 +30,7 @@ const utf8Decode = bytes => decodeURIComponent(escape(Array.from(bytes, b => Str
 
 function harness() {
   const records = new Map(), config = new Map(), elements = new Map(), remote = new Map(), requests = [], dialogs = [], downloads = [];
+  let uuidCounter = 0;
   let failWrite = false, networkDown = false, rejectWrites = false, remoteCounter = 0, confirmResult = true;
   const element = id => {
     if (!elements.has(id)) elements.set(id, { id, value: '', innerHTML: '', textContent: '', disabled: false,
@@ -77,6 +78,7 @@ function harness() {
   };
   const doc = { getElementById:element, querySelector:element, createElement:()=>({ click(){downloads.push(this.download);} }) };
   const scope = {
+    crypto:{randomUUID:()=> '11111111-1111-4111-8111-' + String(++uuidCounter).padStart(12,'0')},
     indexedDB:{open(){const req={};Promise.resolve().then(()=>{req.result=db;req.onsuccess();});return req;}},
     localStorage:{getItem:k=>config.get(k)||null,setItem:(k,v)=>config.set(k,v)},
     document:doc,window:{addEventListener(){}}, navigator:{clipboard:{}},fetch:fetchMock,
@@ -95,9 +97,12 @@ function harness() {
   const boot = async () => {
     const appProxy={};
     Object.assign(scope,{StorageEngine:storage,App:appProxy,AIEngine:api,AssetLibrary:{isBusy:()=>false,render(){},renderPostReferences(){},prepareReferences:async()=>[]}});
+    scope.ContentStudio = {};
+    scope.MaterialCatalog=evaluate(sources['js/material-catalog.js'],'MaterialCatalog');
     studio=evaluate(sources['js/content-studio.js'],'ContentStudio');
+    Object.assign(scope.ContentStudio, studio);
     ads=evaluate(sources['js/ads-intel.js'],'AdsIntel');
-    Object.assign(scope,{ContentStudio:studio,AdsIntel:ads});
+    Object.assign(scope,{AdsIntel:ads});
     const inline=[...sources['index.html'].matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].find(m=>m[1].includes('const App ='))[1];
     app=evaluate(inline,'App');Object.assign(appProxy,app);await app.init();return app;
   };

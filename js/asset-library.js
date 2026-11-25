@@ -11,7 +11,7 @@ const AssetLibrary = (() => {
   const isBusy = () => busy;
   const companyId = ws => App.getWorkspaceCompanyId(ws);
   function ensureIdle() {
-    if (busy || ContentStudio.isGenerating() || App.isWorkspaceBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
+    if (busy || MaterialCatalog.isBusy() || ContentStudio.isGenerating() || App.isWorkspaceBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
   }
   function getImage(owner, id) {
     const key = owner + ':' + id;

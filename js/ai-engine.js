@@ -34,6 +34,9 @@ const AIEngine = (() => {
   }
 
   async function generateWithExclusions(ws, prompt, system, readItems, references = []) {
+    const materialContext = MaterialCatalog.prepareGeneration(ws);
+    const catalogContext = MaterialCatalog.contextText(materialContext);
+    let materialFeedback = '';
     for (let attempt = 0; attempt < 2; attempt++) {
       const excluded = excludedIdeas(ws);
       const manual = excluded.filter(exclusionLabel);
@@ -41,9 +44,11 @@ const AIEngine = (() => {
         id: idea.id, title: idea.title, insight: idea.insight, status: exclusionLabel(idea) || 'متشبع'
       }));
       const rule = 'استبعد الزوايا التالية من كل نتيجة حتى لو تغير العنوان أو الصياغة، وحتى لو طلبت الملاحظة إعادة استخدامها.';
-      const result = await callGeminiJSON(prompt + '\n' + rule + '\n' + JSON.stringify(exclusions),
-        [system, CONTENT_LANGUAGE].filter(Boolean).join('\n'), references);
-      const items = readItems(result);
+      const result = await callGeminiJSON(prompt + '\n' + catalogContext + '\n' + materialFeedback + '\n' + rule + '\n' + JSON.stringify(exclusions),
+        [system, CONTENT_LANGUAGE, 'كتالوج الخامات المعتمد المرفق هو المصدر الوحيد لمواصفات الخامات. لا تستكمل معلومة ناقصة من معرفتك أو الصور أو الهوية أو العروض أو ملاحظات المستخدم. لا تستخدم بيانات المسودات. أخرج materialIds لكل نتيجة، واربط أي اسم خامة أو مواصفة بالمعرّف المعتمد المناسب. المحتوى العام يستخدم materialIds=[] و material=غير محدد من غير ادعاءات عن خامة.'].filter(Boolean).join('\n'), references);
+      let items;
+      try { items = MaterialCatalog.groundItems(readItems(result), materialContext); }
+      catch (error) { materialFeedback = error.message + ' صحّح materialIds والتزم بالكتالوج فقط.'; continue; }
       if (items.some(item => excludedIdeas(ws).some(idea => matchesIdea(idea, item)))) continue;
 
       if (manual.length > 0) {
@@ -57,13 +62,13 @@ const AIEngine = (() => {
       if (current.some(idea => !excluded.includes(idea) || (exclusionLabel(idea) && !manual.includes(idea)))) continue;
       return items.map(item => ({ ...item, referenceImages: references.map(referenceSnapshot) }));
     }
-    throw new Error('التوليد رجّع زاوية مستبعدة. جرّب التوليد مرة تانية.');
+    throw new Error(materialFeedback || 'التوليد رجّع زاوية مستبعدة. جرّب التوليد مرة تانية.');
   }
 
   function buildCompactContext(ws) {
     const core = ws.brandCore;
     const activeRules = (core.rules || []).slice(0, 15).map((r, i) => `${i + 1}. ${r}`).join('\n');
-    const materialsList = (core.materials || []).join(', ');
+    const materialsList = 'كتالوج الخامات المعتمد المرفق فقط؛ الأسماء القديمة مش مصدر مواصفات.';
     const offersSummary = (core.offers || []).map(o => `- ${o.title} (${o.segment}): ${o.details}`).join('\n');
 
     const approvedIdeas = (ws.ideas || []).filter(i => i.status === 'approved');
@@ -189,11 +194,12 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
   "posts": [
     {
       "title": "عنوان مختصر للفكرة",
+      "materialIds": ["معرّف خامة من الكتالوج أو مصفوفة فارغة للمحتوى العام"],
       "ideaId": "ID الفكرة من القائمة إن وجد أو new",
       "ideaTitle": "اسم الفكرة أو الزاوية",
       "isNewIdea": true,
       "segment": "B2C أو B2B",
-      "material": "اسم الخامة أو المنتج من القائمة",
+      "material": "اسم البطاقة المرتبطة بـ materialIds أو غير محدد للمحتوى العام",
       "copy": "نص البوست الكامل الجاهز للنشر على فيسبوك بأسلوب البراند",
       "visualDirection": "وصف دقيق لتصور الصورة وزاوية التصوير والعناصر",
       "colorPalette": "درجة الألوان المطلوبة",
@@ -222,11 +228,12 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
 {
   "post": {
     "title": "عنوان مختصر للفكرة",
+    "materialIds": ["معرّف خامة من الكتالوج أو مصفوفة فارغة للمحتوى العام"],
     "ideaId": "ID الفكرة من القائمة إن وجد أو new",
     "ideaTitle": "اسم الفكرة أو الزاوية",
     "isNewIdea": true,
     "segment": "B2C أو B2B",
-    "material": "اسم الخامة أو المنتج",
+    "material": "اسم البطاقة المرتبطة بـ materialIds أو غير محدد للمحتوى العام",
     "copy": "نص البوست الكامل الجاهز للنشر",
     "visualDirection": "وصف دقيق لتصور الصورة وزاوية التصوير",
     "colorPalette": "درجة الألوان المطلوبة",
@@ -254,6 +261,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
   "ideas": [
     {
       "title": "عنوان الفكرة التسويقية",
+      "materialIds": ["معرّف خامة من الكتالوج أو مصفوفة فارغة للمحتوى العام"],
       "insight": "الـ Insight النفسي أو العملي وراء الفكرة ولماذا ستقنع العميل",
       "segment": "B2C أو B2B"
     }

@@ -42,7 +42,7 @@ const ContentStudio = (() => {
 
     const tbody = document.getElementById('posts-table-body');
     const posts = ws.calendar || [];
-    if (!posts.length) AssetLibrary.renderPostReferences(null, ws);
+    if (!posts.length) { AssetLibrary.renderPostReferences(null, ws); MaterialCatalog.renderPost(null); }
     if (!tbody) return;
 
     if (posts.length === 0) {
@@ -70,6 +70,7 @@ const ContentStudio = (() => {
 
     const post = posts[selectedPostIndex];
     AssetLibrary.renderPostReferences(post, ws);
+    MaterialCatalog.renderPost(post);
     const panel = document.getElementById('brief-inspector-content');
     if (panel && post) {
       panel.classList.remove('opacity-40', 'pointer-events-none');
@@ -151,7 +152,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateCalendar() {
-    if (generating || AssetLibrary.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-calendar');
     const orig = btn.innerHTML;
     const mode = document.getElementById('calendar-generation-mode').value;
@@ -177,7 +178,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateSinglePost() {
-    if (generating || AssetLibrary.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-single');
     const orig = btn.innerHTML;
     const noteEl = document.getElementById('single-post-note');
@@ -200,7 +201,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateRefImage() {
-    if (generating || AssetLibrary.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const ws = App.getCurrentWorkspace();
     const post = ws.calendar[selectedPostIndex];
     if (!post) return;
@@ -270,7 +271,7 @@ const ContentStudio = (() => {
   }
 
   async function handleGenerateIdeas() {
-    if (generating || AssetLibrary.isBusy() || App.isWorkspaceBusy()) return;
+    if (generating || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || App.isWorkspaceBusy()) return;
     const btn = document.getElementById('btn-gen-ideas');
     const orig = btn.innerHTML;
     try {
@@ -280,7 +281,7 @@ const ContentStudio = (() => {
       const references = await AssetLibrary.prepareReferences(ws);
       const list = await AIEngine.generateIdeas(ws, 4, references);
       if (!Array.isArray(list) || !list.length || list.some(it => !it || typeof it.title !== 'string')) throw new Error('لم يتم استلام أفكار صالحة. حاول مرة تانية.');
-      list.forEach(it => ws.ideas.unshift({ id: 'idea-' + Date.now() + Math.random(), title: it.title, insight: it.insight, referenceImages: it.referenceImages || [], segment: it.segment || 'B2C', saturation: 0, status: 'pending' }));
+      list.forEach(it => ws.ideas.unshift({ id: 'idea-' + Date.now() + Math.random(), title: it.title, insight: it.insight, referenceImages: it.referenceImages || [], materialIds: it.materialIds || [], materialSnapshots: it.materialSnapshots || [], materialGaps: it.materialGaps || [], segment: it.segment || 'B2C', saturation: 0, status: 'pending' }));
       await App.persistWorkspace(); App.refreshUI(); App.showToast('تم توليد 4 أفكار جديدة');
     } catch (e) { App.showError(e); }
     finally { generating = false; btn.disabled = false; btn.innerHTML = orig; }
