@@ -34,6 +34,8 @@ const AIEngine = (() => {
   }
 
   async function generateWithExclusions(ws, prompt, system, readItems, references = []) {
+    ContentMemory.ensure(ws);
+    const publishedContext = ContentMemory.historyContext(ws);
     const materialContext = MaterialCatalog.prepareGeneration(ws);
     const catalogContext = MaterialCatalog.contextText(materialContext);
     let materialFeedback = '';
@@ -41,19 +43,20 @@ const AIEngine = (() => {
       const excluded = excludedIdeas(ws);
       const manual = excluded.filter(exclusionLabel);
       const exclusions = excluded.map(idea => ({
-        id: idea.id, title: idea.title, insight: idea.insight, status: exclusionLabel(idea) || 'متشبع'
+        id: idea.id, title: idea.title, insight: idea.insight, status: exclusionLabel(idea) || 'متشبع', reason: idea.exclusionReason || 'سبب غير مسجّل في النسخة القديمة'
       }));
       const rule = 'استبعد الزوايا التالية من كل نتيجة حتى لو تغير العنوان أو الصياغة، وحتى لو طلبت الملاحظة إعادة استخدامها.';
-      const result = await callGeminiJSON(prompt + '\n' + catalogContext + '\n' + materialFeedback + '\n' + rule + '\n' + JSON.stringify(exclusions),
+      const result = await callGeminiJSON(prompt + '\n' + publishedContext + '\n' + catalogContext + '\n' + materialFeedback + '\n' + rule + '\n' + JSON.stringify(exclusions),
         [system, CONTENT_LANGUAGE, 'كتالوج الخامات المعتمد المرفق هو المصدر الوحيد لمواصفات الخامات. لا تستكمل معلومة ناقصة من معرفتك أو الصور أو الهوية أو العروض أو ملاحظات المستخدم. لا تستخدم بيانات المسودات. أخرج materialIds لكل نتيجة، واربط أي اسم خامة أو مواصفة بالمعرّف المعتمد المناسب. المحتوى العام يستخدم materialIds=[] و material=غير محدد من غير ادعاءات عن خامة.'].filter(Boolean).join('\n'), references);
       let items;
       try { items = MaterialCatalog.groundItems(readItems(result), materialContext); }
       catch (error) { materialFeedback = error.message + ' صحّح materialIds والتزم بالكتالوج فقط.'; continue; }
+      if (ContentMemory.isDuplicate(ws, items)) { materialFeedback = 'التوليد كرّر منشور أو عنوان من سجل المنشور. اكتب فكرة ومعالجة مختلفة.'; continue; }
       if (items.some(item => excludedIdeas(ws).some(idea => matchesIdea(idea, item)))) continue;
 
       if (manual.length > 0) {
         const candidates = items.map(({ title, ideaTitle, insight, copy }) => ({ title, ideaTitle, insight, copy }));
-        const review = await callGeminiJSON(JSON.stringify({ excluded: manual.map(({ title, insight }) => ({ title, insight })), candidates }),
+        const review = await callGeminiJSON(JSON.stringify({ excluded: manual.map(({ title, insight, exclusionReason }) => ({ title, insight, reason: exclusionReason || 'غير مسجّل' })), candidates }),
           'راجع الزوايا التسويقية. أعد JSON بالشكل {"allowed":true} فقط إذا كانت كل الزوايا المقترحة مختلفة في المعنى عن الزوايا المستبعدة. إذا تكررت أي زاوية ولو بصياغة مختلفة، أعد {"allowed":false}.');
         if (review?.allowed !== true) continue;
       }
@@ -374,4 +377,5 @@ ${yesterdaySummary ? JSON.stringify(yesterdaySummary, null, 2) : 'لا توجد 
     analyzeAdsWithRules
   };
 })();
+
 
