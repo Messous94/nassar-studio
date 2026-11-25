@@ -64,7 +64,7 @@ const MaterialCatalog = (() => {
         materialSnapshots: snapshots, materialGaps: snapshots.map(material => ({ id: material.id, name: material.name, fields: missing(material).map(key => FIELD_NAMES[key]) })).filter(gap => gap.fields.length) };
     });
   }
-  function idle() { if (busy || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || ContentStudio.isGenerating() || App.isWorkspaceBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.'); }
+  function idle() { if (busy || ContentPerformance.isBusy() || PostWorkshop.isBusy() || ContentMemory.isBusy() || AssetLibrary.isBusy() || ContentStudio.isGenerating() || App.isWorkspaceBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.'); }
   function refresh() { signature = ''; App.refreshUI(); }
 
   function render(workspace) {
@@ -202,5 +202,6 @@ const MaterialCatalog = (() => {
   }
   return { isBusy, ensure, missing, prepareGeneration, contextText, groundItems, render, renderPost, refresh, importLegacy, setScope, toggleSelection, openEditor, closeEditor, toggleEditorImage, saveEditor, changeStatus, remove, useImages };
 })();
+
 
 

@@ -467,19 +467,20 @@
         <div id="ads-diagnosis-box"></div>
       </div>
 
-      <!-- Bottom Grid: Offline Sales Attribution + Live Search Platform Rules -->
+      <div class="glass-card rounded-xl p-5 space-y-4"><h3 class="font-bold text-sm">المحتوى والحملات ونتائج البيع</h3><p class="text-xs text-muted">اربط البوست بالحملة، وسجّل أرقامه الخاصة خلال فترة محددة. الفراغ معناه غير مسجّل، والصفر نتيجة فعلية. أرقام الحملة الإجمالية ما بتتوزعش تلقائيًا على البوستات.</p><div class="flex gap-3 text-xs"><button onclick="ContentPerformance.openLink()" class="p-2 rounded-lg bg-ink text-white">ربط محتوى بحملة</button><button onclick="ContentPerformance.openResult()" class="p-2 rounded-lg bg-stoneBg">تسجيل نتائج</button></div><div class="grid md:grid-cols-2 gap-4"><div><h4 class="text-xs font-bold mb-2">روابط الحملات</h4><div id="content-campaign-links" class="space-y-2 max-h-96 overflow-y-auto"></div></div><div><h4 class="text-xs font-bold mb-2">سجل النتائج والتعديلات</h4><div id="content-performance-records" class="space-y-2 max-h-96 overflow-y-auto"></div></div></div></div>
+<!-- Bottom Grid: Offline Sales Attribution + Live Search Platform Rules -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
         <!-- Offline Sales Blended Attribution (6 cols) -->
         <div class="lg:col-span-6 glass-card rounded-xl p-5 space-y-4">
           <div class="border-b border-borderSubtle pb-2">
-            <h3 class="text-sm font-bold text-ink">ربط العملاء المنفذين أوفلاين (Blended CAC)</h3>
-            <p class="text-xs text-muted">سجّل عدد العملاء الذين تعاقدوا أوفلاين لحساب تكلفة العميل الحقيقية دون تعطيل تيم المبيعات</p>
+            <h3 class="text-sm font-bold text-ink">سجل تعاقدات أوفلاين غير منسوبة لمحتوى</h3>
+            <p class="text-xs text-muted">نسب حسابية بين إجماليات السجل القديم؛ لا تثبت نسبة التعاقد لحملة أو بوست. منفصلة عن نتائج المحتوى.</p>
           </div>
 
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
             <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle">
-              <span class="text-muted block text-[11px]">تكلفة العميل الحقيقية</span>
+              <span class="text-muted block text-[11px]">صرف مسجّل / تعاقدات مسجلة</span>
               <strong id="metric-real-cac" class="text-sm text-ink">-</strong>
             </div>
             <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle">
@@ -491,7 +492,7 @@
               <strong id="metric-total-spend" class="text-sm text-ink">0</strong>
             </div>
             <div class="p-3 rounded-lg bg-stoneBg border border-borderSubtle">
-              <span class="text-muted block text-[11px]">العائد الكلي (ROAS)</span>
+              <span class="text-muted block text-[11px]">إيراد مسجّل / صرف مسجّل</span>
               <strong id="metric-blended-roas" class="text-sm text-bronze">-</strong>
             </div>
           </div>
@@ -526,7 +527,7 @@
     </section>
 
     <!-- ==================== VIEW 5: EXECUTIVE REPORTS & SEASONS ==================== -->
-    <section id="view-reports" class="hidden space-y-5">
+    <section id="view-reports" class="hidden space-y-5"><div class="glass-card rounded-xl p-5 space-y-4"><div class="flex justify-between gap-3"><h3 class="font-bold text-sm">نتائج المحتوى المسجّلة</h3><button onclick="ContentPerformance.exportReport()" class="text-xs text-bronze">تنزيل CSV</button></div><p class="text-xs text-muted">الحساب يشمل التسجيلات الموجودة بالكامل داخل الفترة. المجموع الجزئي ظاهر باكتماله، وتكاليف النتائج تحتاج بيانات مكتملة. نسب التحويل تظهر لنفس دفعة العملاء فقط.</p><div class="grid sm:grid-cols-4 gap-3"><label class="block text-xs">من<input id="performance-report-from" type="date" onchange="ContentPerformance.renderReport(App.getCurrentWorkspace())" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">إلى<input id="performance-report-to" type="date" onchange="ContentPerformance.renderReport(App.getCurrentWorkspace())" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">التجميع<select id="performance-group-by" onchange="ContentPerformance.renderReport(App.getCurrentWorkspace())" class="block w-full p-2 border border-borderSubtle rounded-lg"><option value="angle">الزاوية</option><option value="material">الخامة</option><option value="audience">الجمهور</option><option value="campaign">الحملة</option><option value="post">البوست</option></select></label><label class="block text-xs">ربط الحملة<select id="performance-link-filter" onchange="ContentPerformance.renderReport(App.getCurrentWorkspace())" class="block w-full p-2 border border-borderSubtle rounded-lg"><option value="">كل الروابط</option></select></label></div><div id="performance-summary" class="grid grid-cols-2 lg:grid-cols-5 gap-2"></div><p id="performance-quality" class="text-xs text-muted leading-relaxed"></p><div class="overflow-x-auto"><table class="w-full text-xs text-right whitespace-nowrap"><thead><tr><th class="p-2">المجموعة</th><th class="p-2">التسجيلات</th><th class="p-2">الصرف ج.م</th><th class="p-2">الاستفسارات</th><th class="p-2">المؤهلة</th><th class="p-2">المعاينات</th><th class="p-2">التعاقدات</th><th class="p-2">الإيراد ج.م</th><th class="p-2">صرف/مؤهل</th><th class="p-2">صرف/معاينة</th><th class="p-2">صرف/تعاقد</th><th class="p-2">إيراد/صرف</th><th class="p-2">تأهيل %</th><th class="p-2">تعاقد/معاينة %</th></tr></thead><tbody id="performance-report-body"></tbody></table></div></div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
 
         <!-- Executive Report -->
@@ -554,6 +555,7 @@
     </section>
 
   </main>
+<div id="content-link-editor" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4"><div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90dvh] overflow-y-auto p-5 space-y-4"><h3 class="font-bold text-sm">ربط المحتوى بالحملة</h3><label class="block text-xs">المحتوى<select id="link-content"  class="block w-full p-2 border border-borderSubtle rounded-lg"></select></label><datalist id="performance-campaign-names"></datalist><label class="block text-xs">اسم الحملة<input id="link-edit-campaignName" type="text" maxlength="200" list="performance-campaign-names" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">معرّف الحملة — اختياري<input id="link-edit-campaignId" type="text" maxlength="100" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">معرّف الإعلان — اختياري<input id="link-edit-adId" type="text" maxlength="100" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">الجمهور — اختياري<input id="link-edit-audience" type="text" maxlength="200" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">ملاحظات<input id="link-edit-notes" type="text" maxlength="2000" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">المنصة<select id="link-edit-platform"  class="block w-full p-2 border border-borderSubtle rounded-lg"><option value="">اختار المنصة</option><option>Meta</option><option>Google</option><option>Other</option></select></label><p class="text-xs text-muted">تعديل الربط لا يغير أبعاد النتائج القديمة. تعديل تسجيل النتيجة يحدّث أبعاده من الربط الحالي.</p><div class="flex gap-3 text-xs"><button onclick="ContentPerformance.saveLink()" class="p-2 bg-ink text-white rounded-lg">حفظ</button><button onclick="ContentPerformance.closeLink()" class="p-2 bg-stoneBg rounded-lg">إلغاء</button></div></div></div><div id="content-result-editor" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4"><div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90dvh] overflow-y-auto p-5 space-y-4"><h3 class="font-bold text-sm">تسجيل نتائج المحتوى</h3><label class="block text-xs">الربط<select id="result-link" onchange="ContentPerformance.materialOptions()" class="block w-full p-2 border border-borderSubtle rounded-lg"></select></label><div class="grid grid-cols-2 gap-3"><label class="block text-xs">بداية الفترة<input id="result-from" type="date"  class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">نهاية الفترة<input id="result-to" type="date"  class="block w-full p-2 border border-borderSubtle rounded-lg" /></label></div><label class="block text-xs">مصدر الأرقام<select id="result-method"  class="block w-full p-2 border border-borderSubtle rounded-lg"><option value="direct">أرقام خاصة بالمحتوى</option><option value="allocated">توزيع يدوي معلوم</option></select></label><label class="block text-xs">تعريف التوزيع — مطلوب للتوزيع اليدوي<input id="result-allocation" type="text" maxlength="200" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><p class="text-xs text-muted">التوزيع اليدوي يحتاج أجزاء منفصلة غير مكررة. لا تسجّل إجمالي نفس الحملة لكل بوست. كل نتيجة تُحسب في خامة واحدة؛ اختيار غير مسجّلة متاح.</p><label class="block text-xs">الخامة المنسوبة للنتائج<select id="result-material"  class="block w-full p-2 border border-borderSubtle rounded-lg"></select></label><label class="block text-xs">اسم الخامة عند اختيار الكتابة اليدوية<input id="result-material-name" type="text" maxlength="200" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><div class="grid grid-cols-2 gap-3"><label class="block text-xs">الصرف — ج.م<input id="result-metric-spend" type="text" inputmode="decimal" placeholder="غير مسجّل" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">مرات الظهور<input id="result-metric-impressions" type="text" inputmode="decimal" placeholder="غير مسجّل" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">النقرات<input id="result-metric-clicks" type="text" inputmode="decimal" placeholder="غير مسجّل" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">الاستفسارات<input id="result-metric-inquiries" type="text" inputmode="decimal" placeholder="غير مسجّل" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">الاستفسارات المؤهلة<input id="result-metric-qualified" type="text" inputmode="decimal" placeholder="غير مسجّل" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">المعاينات<input id="result-metric-measurements" type="text" inputmode="decimal" placeholder="غير مسجّل" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">التعاقدات<input id="result-metric-contracts" type="text" inputmode="decimal" placeholder="غير مسجّل" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><label class="block text-xs">الإيراد — ج.م<input id="result-metric-revenue" type="text" inputmode="decimal" placeholder="غير مسجّل" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label></div><label class="block text-xs"><input id="result-cohort" type="checkbox" /> مراحل البيع تخص نفس دفعة العملاء — لإتاحة نسب التحويل</label><label class="block text-xs">ملاحظات<input id="result-notes" type="text" maxlength="2000" class="block w-full p-2 border border-borderSubtle rounded-lg" /></label><div class="flex gap-3 text-xs"><button onclick="ContentPerformance.saveResult()" class="p-2 bg-ink text-white rounded-lg">حفظ</button><button onclick="ContentPerformance.closeResult()" class="p-2 bg-stoneBg rounded-lg">إلغاء</button></div></div></div>
 
   <!-- ==================== SETTINGS MODAL (GEMINI API & GITHUB REPO) ==================== -->
   <div id="settings-modal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4">
@@ -720,14 +722,15 @@
   <div id="toast" role="status" aria-live="polite" class="fixed bottom-5 left-5 right-5 sm:right-auto sm:max-w-lg bg-ink text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
 
   <!-- Modular Scripts -->
-  <script src="js/storage.js?v=9"></script>
-  <script src="js/asset-library.js?v=9"></script>
-  <script src="js/material-catalog.js?v=9"></script>
-  <script src="js/content-memory.js?v=9"></script>
-  <script src="js/post-workshop.js?v=9"></script>
-  <script src="js/ai-engine.js?v=9"></script>
-  <script charset="UTF-8" src="js/content-studio.js?v=9"></script>
-  <script src="js/ads-intel.js?v=5"></script>
+  <script src="js/storage.js?v=10"></script>
+  <script src="js/asset-library.js?v=10"></script>
+  <script src="js/material-catalog.js?v=10"></script>
+  <script src="js/content-memory.js?v=10"></script>
+  <script src="js/post-workshop.js?v=10"></script>
+  <script src="js/content-performance.js?v=10"></script>
+  <script src="js/ai-engine.js?v=10"></script>
+  <script charset="UTF-8" src="js/content-studio.js?v=10"></script>
+  <script src="js/ads-intel.js?v=10"></script>
 
   <!-- Main Application Controller -->
   <script>
@@ -754,7 +757,7 @@
         renderCompanySelector();
         currentWorkspace = await StorageEngine.loadWorkspace(currentCompanyId);
         MaterialCatalog.ensure(currentWorkspace);
-        ContentMemory.ensure(currentWorkspace);
+        ContentMemory.ensure(currentWorkspace); ContentPerformance.ensure(currentWorkspace);
         workspaceOwners.set(currentWorkspace, currentCompanyId);
         platformRules = await StorageEngine.loadPlatformRules();
         await StorageEngine.refreshSyncStatus(currentCompanyId);
@@ -779,7 +782,7 @@
       }
 
       async function switchWorkspace(companyId) {
-        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy() || PostWorkshop.isBusy()) {
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy() || PostWorkshop.isBusy() || ContentPerformance.isBusy()) {
           document.getElementById('workspace-selector').value = currentCompanyId;
           showToast('استنى لحد ما العملية الحالية تخلص.', true);
           return;
@@ -795,7 +798,7 @@
           catch (error) { if (!error.savedLocally) throw error; showError(error); }
           const workspace = await StorageEngine.loadWorkspace(companyId);
           MaterialCatalog.ensure(workspace);
-          ContentMemory.ensure(workspace);
+          ContentMemory.ensure(workspace); ContentPerformance.ensure(workspace);
           currentCompanyId = companyId;
           currentWorkspace = workspace;
           workspaceOwners.set(workspace, companyId);
@@ -834,7 +837,7 @@
 
       async function persistWorkspace(workspace = currentWorkspace) {
         MaterialCatalog.ensure(workspace);
-        ContentMemory.ensure(workspace);
+        ContentMemory.ensure(workspace); ContentPerformance.ensure(workspace);
         const id = workspaceOwners.get(workspace);
         if (!id) throw new Error('مساحة العمل غير جاهزة للحفظ.');
         const result = await StorageEngine.saveWorkspace(id, workspace);
@@ -878,7 +881,7 @@
       }
 
       function canRestore() {
-        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy() || PostWorkshop.isBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
+        if (restoring || switching || ContentStudio.isGenerating() || AssetLibrary.isBusy() || MaterialCatalog.isBusy() || ContentMemory.isBusy() || PostWorkshop.isBusy() || ContentPerformance.isBusy()) throw new Error('استنى لحد ما العملية الحالية تخلص.');
         PostWorkshop.requireSavedCopy();
       }
 
@@ -897,7 +900,7 @@
           await checkpoint();
           await StorageEngine.importBackupImages(backupText, id);
           MaterialCatalog.ensure(workspace);
-          ContentMemory.ensure(workspace);
+          ContentMemory.ensure(workspace); ContentPerformance.ensure(workspace);
           currentWorkspace = workspace;
           workspaceOwners.set(workspace, id);
           refreshUI();
@@ -922,7 +925,7 @@
           StorageEngine.validateWorkspace(previous);
           await checkpoint();
           MaterialCatalog.ensure(previous);
-          ContentMemory.ensure(previous);
+          ContentMemory.ensure(previous); ContentPerformance.ensure(previous);
           currentWorkspace = previous;
           workspaceOwners.set(previous, currentCompanyId);
           refreshUI();
@@ -972,6 +975,7 @@
         ContentMemory.render(currentWorkspace);
         AdsIntel.renderAdsView(currentWorkspace, platformRules);
         AdsIntel.renderReportsView(currentWorkspace);
+        ContentPerformance.render(currentWorkspace);
       }
 
       function renderAssetsView() {
@@ -1070,7 +1074,7 @@
           await checkpoint();
           const pulled = await StorageEngine.forcePullFromGitHub(currentCompanyId);
           MaterialCatalog.ensure(pulled.ws);
-          ContentMemory.ensure(pulled.ws);
+          ContentMemory.ensure(pulled.ws); ContentPerformance.ensure(pulled.ws);
           currentWorkspace = pulled.ws;
           workspaceOwners.set(currentWorkspace, currentCompanyId);
           renderCompanySelector();
@@ -1167,6 +1171,7 @@
   </script>
 </body>
 </html>
+
 
 
 

@@ -15,7 +15,7 @@ const PostWorkshop = (() => {
     const saved=String(post.copy||'');
     if(renderedPost!==post||input.value===renderedCopy||input.value===saved){input.value=saved;renderedCopy=saved;renderedPost=post;}
   }
-  function idle(){if(busy||ContentStudio.isGenerating()||ContentMemory.isBusy()||AssetLibrary.isBusy()||MaterialCatalog.isBusy()||App.isWorkspaceBusy())throw new Error('استنى لحد ما العملية الحالية تخلص.');}
+  function idle(){if(busy||ContentPerformance.isBusy()||ContentStudio.isGenerating()||ContentMemory.isBusy()||AssetLibrary.isBusy()||MaterialCatalog.isBusy()||App.isWorkspaceBusy())throw new Error('استنى لحد ما العملية الحالية تخلص.');}
   function editable(post){return {copy:String(post.copy||''),visualDirection:String(post.visualDirection||''),designerBrief:String(post.designerBrief||'')};}
   function normalize(value){return String(value||'').normalize('NFKC').toLowerCase().replace(/[\u0640\u064B-\u065F\u0670]/g,'').replace(/[أإآٱ]/g,'ا').replace(/[^\p{L}\p{N}]/gu,'');}
   function facts(material){return {id:material.id,name:material.name,brand:material.brand,model:material.model,origin:material.origin,uses:[...(material.uses||[])].sort(),approvedFacts:[...(material.approvedFacts||[])].sort()};}
@@ -138,3 +138,4 @@ const PostWorkshop = (() => {
   function markDirty(){const post=selected();if(post)render(App.getCurrentWorkspace(),post);}
   return {PARTS,isBusy,hasUnsavedCopy,requireSavedCopy,canLeave,renderCopy,currentStamp,reviewInput,localIssues,review,applyChange,partText,partPatch,regenerationInputs,openEditor,closeEditor,updatePart,generateAlternative,applyAlternative,saveManualCopy,restoreVersion,openReview,closeReview,requestApproval,approveWithNotes,approvalConfirmed,render,markDirty};
 })();
+

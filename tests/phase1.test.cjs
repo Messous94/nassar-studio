@@ -1,7 +1,7 @@
 // Dependency-free regression tests. Run: node tests/phase1.test.cjs
 const fs = require('node:fs');
 const path = require('node:path');
-const sources = Object.fromEntries(['index.html','js/storage.js','js/content-studio.js','js/ads-intel.js','js/material-catalog.js','js/content-memory.js','js/post-workshop.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
+const sources = Object.fromEntries(['index.html','js/storage.js','js/content-studio.js','js/ads-intel.js','js/material-catalog.js','js/content-memory.js','js/post-workshop.js','js/content-performance.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
 
 const assert = (condition, message = 'Assertion failed') => { if (!condition) throw new Error(message); };
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -100,13 +100,16 @@ function harness() {
     scope.ContentStudio = {};
     scope.ContentMemory = {};
     scope.PostWorkshop = {};
+    scope.ContentPerformance = {};
+    scope.AdsIntel = {};
     scope.MaterialCatalog=evaluate(sources['js/material-catalog.js'],'MaterialCatalog');
     Object.assign(scope.ContentMemory, evaluate(sources['js/content-memory.js'],'ContentMemory'));
     Object.assign(scope.PostWorkshop, evaluate(sources['js/post-workshop.js'],'PostWorkshop'));
+    Object.assign(scope.ContentPerformance, evaluate(sources['js/content-performance.js'],'ContentPerformance'));
     studio=evaluate(sources['js/content-studio.js'],'ContentStudio');
     Object.assign(scope.ContentStudio, studio);
     ads=evaluate(sources['js/ads-intel.js'],'AdsIntel');
-    Object.assign(scope,{AdsIntel:ads});
+    Object.assign(scope.AdsIntel,ads);
     const inline=[...sources['index.html'].matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].find(m=>m[1].includes('const App ='))[1];
     app=evaluate(inline,'App');Object.assign(appProxy,app);await app.init();return app;
   };
@@ -230,5 +233,6 @@ if (require.main === module) runTests().then(results => console.log(results.leng
 
 
 module.exports = { harness, runTests, sources, assert };
+
 
 
