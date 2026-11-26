@@ -1,7 +1,7 @@
 // Dependency-free regression tests. Run: node tests/phase1.test.cjs
 const fs = require('node:fs');
 const path = require('node:path');
-const sources = Object.fromEntries(['index.html','js/storage.js','js/content-studio.js','js/ads-intel.js','js/material-catalog.js','js/content-memory.js','js/post-workshop.js','js/content-performance.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
+const sources = Object.fromEntries(['index.html','js/storage.js','js/ai-engine.js','js/content-studio.js','js/ads-intel.js','js/material-catalog.js','js/content-memory.js','js/post-workshop.js','js/content-performance.js'].map(p => [p, fs.readFileSync(path.join(__dirname, '..', p), 'utf8')]));
 
 const assert = (condition, message = 'Assertion failed') => { if (!condition) throw new Error(message); };
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -106,6 +106,8 @@ function harness() {
     Object.assign(scope.ContentMemory, evaluate(sources['js/content-memory.js'],'ContentMemory'));
     Object.assign(scope.PostWorkshop, evaluate(sources['js/post-workshop.js'],'PostWorkshop'));
     Object.assign(scope.ContentPerformance, evaluate(sources['js/content-performance.js'],'ContentPerformance'));
+    const angleApi=evaluate(sources['js/ai-engine.js'],'AIEngine');
+    for(const key of ['eligibleIdeas','preparePostGeneration','assertPostAngleAllowed'])api[key]=angleApi[key];
     studio=evaluate(sources['js/content-studio.js'],'ContentStudio');
     Object.assign(scope.ContentStudio, studio);
     ads=evaluate(sources['js/ads-intel.js'],'AdsIntel');
@@ -119,6 +121,18 @@ function harness() {
     failNextWrite(){failWrite=true;},network(value){networkDown=value;},rejectWrites(value){rejectWrites=value;},
     confirm(value){confirmResult=value;},intercept(fn){intercept=fn;}
   };
+}
+
+// Explicit approved angle fixtures; mock responses echo the request's planned IDs.
+function seedAngles(h) {
+ const ws=h.app.getCurrentWorkspace();
+ for(let n=0;n<8;n++)if(!ws.ideas.some(idea=>idea.id==='test-angle-'+n))ws.ideas.push({id:'test-angle-'+n,title:'زاوية اختبار آمنة '+n,insight:'معالجة '+n,status:'approved',saturation:0,saturationBase:0,segment:'B2C'});
+}
+function plannedReply(payload,reply) {
+ const text=payload.contents[0].parts.filter(p=>p.text).map(p=>p.text).join('\n');
+ const line=text.split('[LOCAL APPROVED ANGLE PLAN]\n')[1]?.split('\n')[0];
+ if(line){const plan=JSON.parse(line),items=reply.post?[reply.post]:reply.posts||[];items.forEach((item,index)=>{if(item.ideaId===undefined&&plan[index]){item.ideaId=plan[index].id;item.ideaTitle=plan[index].title;}});}
+ return reply;
 }
 
 async function runTests() {
@@ -172,7 +186,7 @@ async function runTests() {
     assert((await h.storage.loadCompaniesList())[0].id==='x');assert((await h.storage.loadPlatformRules()).rules[0]==='محلية');
   });
   test('Calendar append, replacement, cancellation and invalid result',async()=>{
-    const h=harness(),app=await h.boot(),ws=app.getCurrentWorkspace();ws.calendar=[{title:'قديم'}];await app.persistWorkspace();
+    const h=harness(),app=await h.boot(),ws=app.getCurrentWorkspace();ws.calendar=[{title:'قديم'}];seedAngles(h);await app.persistWorkspace();
     h.api.generateCalendar8=async()=>Array.from({length:8},(_,i)=>({title:'جديد '+i}));
     h.element('calendar-generation-mode').value='append';await h.studio.handleGenerateCalendar();assert(ws.calendar.length===9&&ws.calendar[0].title==='قديم');
     h.element('calendar-generation-mode').value='replace';h.confirm(false);await h.studio.handleGenerateCalendar();assert(ws.calendar.length===9);
@@ -212,7 +226,7 @@ async function runTests() {
   });
   test('Active generation blocks switch/restore and ignores duplicate clicks',async()=>{
     const h=harness(),app=await h.boot();let finish,calls=0;h.element('calendar-generation-mode').value='append';
-    h.api.generateCalendar8=()=>{calls++;return new Promise(resolve=>finish=resolve);};
+    seedAngles(h);h.api.generateCalendar8=()=>{calls++;return new Promise(resolve=>finish=resolve);};
     const pending=h.studio.handleGenerateCalendar();await h.studio.handleGenerateCalendar();await app.switchWorkspace('other');assert(app.getCurrentCompany().id==='nassar-stone');
     await app.restoreRecovery();assert(h.element('toast').textContent.includes('العملية الحالية'));
     finish(Array.from({length:8},(_,i)=>({title:String(i)})));await pending;assert(calls===1);
@@ -232,7 +246,4 @@ async function runTests() {
 if (require.main === module) runTests().then(results => console.log(results.length + ' tests passed\n' + results.join('\n'))).catch(error => { console.error(error); process.exitCode = 1; });
 
 
-module.exports = { harness, runTests, sources, assert };
-
-
-
+module.exports = { harness, runTests, sources, assert, seedAngles, plannedReply };

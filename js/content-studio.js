@@ -25,6 +25,13 @@ const ContentStudio = (() => {
   }
 
   function renderCalendarView(ws) {
+    const angleSelect=document.getElementById('generation-angle');
+    const eligible=AIEngine.eligibleIdeas(ws),previous=angleSelect.value;
+    angleSelect.innerHTML='<option value="">اختيار محلي لأقل زاوية تشبعًا</option>'+eligible.map(idea=>`<option value="${escapeHtml(idea.id)}">${escapeHtml(idea.title)} · ${idea.saturation}%</option>`).join('');
+    angleSelect.value=eligible.some(idea=>idea.id===previous)?previous:(eligible[0]?.id||'');
+    document.getElementById('generation-plan-list').innerHTML=eligible.slice(0,8).map(idea=>`<li>${escapeHtml(idea.title)} · ${idea.saturation}%</li>`).join('')||'<li>مفيش زوايا معتمدة متاحة؛ ولّد أفكار قصيرة واعتمد المناسب الأول.</li>';
+    document.getElementById('generation-plan-summary').textContent='متاح '+eligible.length+' زاوية معتمدة غير مشبعة. البوست من القائمة دي فقط؛ الكاليندر تحتاج 8 زوايا مختلفة. مفيش مراجعة مدفوعة أو إعادة تلقائية بعد التوليد.';
+
     const goalInput = document.getElementById('goal-objective-input');
     if (goalInput) goalInput.value = ws.goal?.objective || '';
 
@@ -157,6 +164,7 @@ const ContentStudio = (() => {
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner ml-1.5"></span> جاري التوليد...`;
       const ws = App.getCurrentWorkspace();
+      AIEngine.preparePostGeneration(ws,8);
       const references = await AssetLibrary.prepareReferences(ws);
       const posts = await AIEngine.generateCalendar8(ws, references);
       if (!Array.isArray(posts) || posts.length !== 8 || posts.some(p => !p || typeof p.title !== 'string')) throw new Error('رد التوليد غير مكتمل. الكاليندر الحالية لم تتغير.');
@@ -184,8 +192,10 @@ const ContentStudio = (() => {
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner spinner-dark ml-1.5"></span> جاري التوليد...`;
       const ws = App.getCurrentWorkspace();
+      const selectedId=document.getElementById('generation-angle').value;
+      AIEngine.preparePostGeneration(ws,1,selectedId);
       const references = await AssetLibrary.prepareReferences(ws);
-      const post = await AIEngine.generateSinglePost(ws, note, references);
+      const post = await AIEngine.generateSinglePost(ws, note, references, selectedId);
       PostWorkshop.requireSavedCopy();
       ws.calendar.unshift({ ...post, id: 'post-' + crypto.randomUUID(), status: 'مسودة', saturationCounted: false, referenceImage: '' });
       if (noteEl) noteEl.value = '';
@@ -208,6 +218,7 @@ const ContentStudio = (() => {
       generating = true;
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner ml-1.5"></span> جاري توليد الصورة...`;
+      AIEngine.assertPostAngleAllowed(ws,post);
       post.referenceImage = await AIEngine.generateReferenceImage(post);
       await App.persistWorkspace();
       App.refreshUI();
@@ -297,7 +308,3 @@ const ContentStudio = (() => {
 
   return { getSelectedPost, isGenerating, renderCalendarView, renderMemoryAndIdeasView, selectPost, setPostStatus, excludeIdea, saveEditedCopy, handleGenerateCalendar, handleGenerateSinglePost, handleGenerateRefImage, exportTeamCalendarFile, handleGenerateIdeas, approveIdea, deleteIdea, addRule, removeRule, addOffer, removeOffer, saveBrandCore, saveGoal };
 })();
-
-
-
-
