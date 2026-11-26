@@ -1,7 +1,7 @@
 // Run: node tests/phase3.test.cjs. No external dependencies.
 const fs = require('node:fs');
 const path = require('node:path');
-const { harness, assert } = require('./phase1.test.cjs');
+const { harness, assert, seedAngles, plannedReply } = require('./phase1.test.cjs');
 const source = file => fs.readFileSync(path.join(__dirname,'..',file),'utf8');
 const clone = value => JSON.parse(JSON.stringify(value));
 const mid = n => 'mat-00000000-0000-4000-8000-' + String(n).padStart(12,'0');
@@ -13,8 +13,9 @@ async function setup() { const h=harness();await h.boot();h.catalog=h.scope.Mate
 function setMaterials(h,items) { h.ws.brandCore.materialCatalog=items;h.ws.brandCore.materialScope='all';h.ws.brandCore.selectedMaterialIds=[]; }
 function fill(h,values) {for(const [key,value]of Object.entries(values))h.element('material-edit-'+key).value=value;}
 function google(h,replies) {
+  seedAngles(h);
   h.configure();h.calls=[];let index=0;
-  h.scope.fetch=async(url,options)=>{const payload=JSON.parse(options.body);h.calls.push(payload);const reply=typeof replies==='function'?replies(payload,index++):replies[Math.min(index++,replies.length-1)];return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(reply)}]}}]})};};
+  h.scope.fetch=async(url,options)=>{const payload=JSON.parse(options.body);h.calls.push(payload);const reply=typeof replies==='function'?replies(payload,index++):replies[Math.min(index++,replies.length-1)];return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(plannedReply(payload,reply))}]}}]})};};
   const ai=h.evaluate(source('js/ai-engine.js'),'AIEngine');Object.assign(h.api,ai);return ai;
 }
 const tests=[];const test=(name,run)=>tests.push({name,run});
@@ -91,12 +92,10 @@ test('Generation payload uses approved catalog and stamps trusted snapshots and 
   h.ws.brandCore.materialCatalog[0].brand='CHANGED';assert(post.materialSnapshots[0].brand==='Brand 1');
 });
 
-test('Invalid generated material retries once; repeated failure saves nothing',async()=>{
+test('Invalid generated material stops after one request and saves nothing',async()=>{
   const h=await setup();setMaterials(h,[material(1)]);
-  let ai=google(h,[{post:{title:'invalid',materialIds:[mid(99)]}},{post:{title:'valid',materialIds:[mid(1)]}}]);
-  assert((await ai.generateSinglePost(h.ws)).title==='valid'&&h.calls.length===2);
-  ai=google(h,[{post:{title:'invalid',materialIds:[mid(99)]}}]);await h.studio.handleGenerateSinglePost();
-  assert(h.calls.length===2&&h.ws.calendar.length===0&&h.element('toast').textContent.includes('كتالوج'));
+  google(h,[{post:{title:'invalid',materialIds:[mid(99)]}}]);await h.studio.handleGenerateSinglePost();
+  assert(h.calls.length===1&&h.ws.calendar.length===0&&h.element('toast').textContent.includes('كتالوج'));
 });
 
 test('Calendar, post and idea handlers persist material snapshots',async()=>{

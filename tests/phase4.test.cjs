@@ -1,12 +1,12 @@
 // Run: node tests/phase4.test.cjs. Node 18+, no external packages.
 const fs=require('node:fs'),path=require('node:path');
-const {harness,assert}=require('./phase1.test.cjs');
+const {harness,assert,seedAngles,plannedReply}=require('./phase1.test.cjs');
 const source=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8');
 const clone=value=>JSON.parse(JSON.stringify(value));
 const values=(n,extra={})=>({title:'منشور '+n,ideaTitle:'زاوية اختبار',copy:'نص منشور '+n,material:'غير محدد',publishedAt:'2000-01-'+String(n).padStart(2,'0'),channel:'Facebook',url:'',publishedImages:[],...extra});
 async function setup(){const h=harness();await h.boot();h.memory=h.scope.ContentMemory;h.ws=h.app.getCurrentWorkspace();return h;}
 function addPost(h,extra={}){const post={id:'post-test-'+(h.ws.calendar.length+1),title:'عنوان',copy:'نص فعلي',ideaTitle:'زاوية اختبار',ideaId:'idea-test',segment:'B2C',status:'مسودة',...extra};h.ws.calendar.push(post);if(!h.ws.ideas.some(idea=>idea.id==='idea-test'))h.ws.ideas.push({id:'idea-test',title:'زاوية اختبار',status:'pending',saturation:0});h.memory.ensure(h.ws);return post;}
-function google(h,replies){h.configure();h.calls=[];let index=0;h.scope.fetch=async(url,options)=>{const payload=JSON.parse(options.body);h.calls.push(payload);const result=typeof replies==='function'?replies(payload,index++):replies[Math.min(index++,replies.length-1)];return{ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(result)}]}}]})};};const ai=h.evaluate(source('js/ai-engine.js'),'AIEngine');Object.assign(h.api,ai);return ai;}
+function google(h,replies){seedAngles(h);h.configure();h.calls=[];let index=0;h.scope.fetch=async(url,options)=>{const payload=JSON.parse(options.body);h.calls.push(payload);const result=typeof replies==='function'?replies(payload,index++):replies[Math.min(index++,replies.length-1)];return{ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(plannedReply(payload,result))}]}}]})};};const ai=h.evaluate(source('js/ai-engine.js'),'AIEngine');Object.assign(h.api,ai);return ai;}
 const tests=[];const test=(name,run)=>tests.push({name,run});
 
 test('Approval preserves saturation; publication increments exactly once and editing does not',async()=>{
@@ -77,17 +77,16 @@ test('Exclusion editor saves post and idea reason through the normal persistence
  const saved=await h.storage.loadWorkspace('nassar-stone');assert(saved.calendar[0].exclusionReason==='الصياغة ضعيفة'&&saved.ideas.find(idea=>idea.id==='idea-test').exclusionReason==='الصياغة ضعيفة');
 });
 
-test('Active manual exclusions reach both generation and semantic review with reasons',async()=>{
+test('Manual exclusions reach generation without an extra paid review',async()=>{
  const h=await setup();addPost(h);h.memory.applyExclusion(h.ws,{kind:'post',index:0,status:'rejected'},'REASON-TO-AVOID');
  const ai=google(h,[{post:{title:'عنوان جديد',materialIds:[],copy:'نص جديد'}},{allowed:true}]);await ai.generateSinglePost(h.ws);
- assert(h.calls.length===2&&JSON.stringify(h.calls[0]).includes('REASON-TO-AVOID')&&JSON.stringify(h.calls[1]).includes('REASON-TO-AVOID'));
+ assert(h.calls.length===1&&JSON.stringify(h.calls[0]).includes('REASON-TO-AVOID'));
 });
 
-test('Published memory enters generation and exact repeats retry once',async()=>{
+test('Published memory enters generation and exact repeats stop without retry',async()=>{
  const h=await setup();h.memory.registerPublication(h.ws,values(1,{title:'العنوان السابق',copy:'النص السابق'}));
- const ai=google(h,[{post:{title:'العنوان السابق',copy:'جديد',materialIds:[]}},{post:{title:'عنوان مختلف',copy:'معالجة مختلفة',materialIds:[]}}]);
- const result=await ai.generateSinglePost(h.ws);assert(result.title==='عنوان مختلف'&&h.calls.length===2&&JSON.stringify(h.calls[0]).includes('PUBLISHED MEMORY'));
- const bad=google(h,[{post:{title:'عنوان آخر',copy:'النص السابق',materialIds:[]}}]);await h.studio.handleGenerateSinglePost();assert(h.calls.length===2&&h.ws.calendar.length===0);
+ google(h,[{post:{title:'العنوان السابق',copy:'جديد',materialIds:[]}}]);
+ await h.studio.handleGenerateSinglePost();assert(h.calls.length===1&&h.ws.calendar.length===0&&JSON.stringify(h.calls[0]).includes('PUBLISHED MEMORY'));
 });
 
 test('Exact repetition checks cover older history beyond the compact prompt window',async()=>{
@@ -96,7 +95,7 @@ test('Exact repetition checks cover older history beyond the compact prompt wind
 });
 
 test('Calendar replacement preserves publication ledger and duplicate avoidance',async()=>{
- const h=await setup(),post=addPost(h);h.memory.registerPublication(h.ws,values(1),post.id);h.api.generateCalendar8=async()=>Array.from({length:8},(_,i)=>({title:'جديد '+i}));
+ const h=await setup(),post=addPost(h);seedAngles(h);h.memory.registerPublication(h.ws,values(1),post.id);h.api.generateCalendar8=async()=>Array.from({length:8},(_,i)=>({title:'جديد '+i}));
  h.element('calendar-generation-mode').value='replace';await h.studio.handleGenerateCalendar();assert(h.ws.calendar.length===8&&h.ws.publicationHistory.length===1&&h.memory.isDuplicate(h.ws,[{title:'منشور 1'}]));
 });
 
@@ -155,4 +154,3 @@ test('Large GitHub workspace files use authenticated raw content instead of empt
 });
 
 (async()=>{for(const {name,run}of tests){await run();console.log('PASS '+name);}console.log(tests.length+' phase 4 tests passed');})().catch(error=>{console.error(error);process.exitCode=1;});
-

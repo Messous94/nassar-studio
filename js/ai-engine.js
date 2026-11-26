@@ -30,42 +30,52 @@ const AIEngine = (() => {
   }
 
   function excludedIdeas(ws) {
-    return (ws.ideas || []).filter(idea => exclusionLabel(idea) || (idea.status === 'approved' && idea.saturation >= 75));
+    return (ws.ideas || []).filter(idea => exclusionLabel(idea) || Number(idea.saturation) >= 75);
   }
 
-  async function generateWithExclusions(ws, prompt, system, readItems, references = []) {
+  function eligibleIdeas(ws) {
     ContentMemory.ensure(ws);
-    const publishedContext = ContentMemory.historyContext(ws);
+    const excluded = excludedIdeas(ws), seen = new Set();
+    return (ws.ideas || []).filter(idea => {
+      const key = normalizeTitle(idea.title);
+      if (idea.status !== 'approved' || !key || seen.has(key) || excluded.some(blocked => matchesIdea(blocked, {ideaId:idea.id, ideaTitle:idea.title}))) return false;
+      seen.add(key); return true;
+    }).sort((a,b) => Number(a.saturation || 0) - Number(b.saturation || 0));
+  }
+
+  function preparePostGeneration(ws, count, selectedId = '') {
+    const eligible = eligibleIdeas(ws);
+    const choices = selectedId ? eligible.filter(idea => idea.id === selectedId) : eligible;
+    if (choices.length < count) throw new Error(selectedId ? 'الزاوية المختارة مش متاحة. اختار زاوية معتمدة وتشبعها أقل من 75%. لم يتم إرسال طلب API.' : 'المتاح ' + eligible.length + ' زاوية معتمدة غير مشبعة؛ المطلوب ' + count + '. ولّد أفكار قصيرة وراجعها واعتمد المناسب قبل كتابة البوستات. لم يتم إرسال طلب API.');
+    return choices.slice(0,count).map(idea => ({id:idea.id,title:idea.title,insight:idea.insight || '',segment:idea.segment || 'B2C'}));
+  }
+
+  function assertPostAngleAllowed(ws, post) {
+    ContentMemory.ensure(ws);
+    const blocked = excludedIdeas(ws).find(idea => matchesIdea(idea,post));
+    if (blocked) throw new Error('الزاوية «' + blocked.title + '» مستبعدة أو تشبعها 75% أو أكتر. غيّر الزاوية أو راجع تشبعها قبل أي طلب API.');
+  }
+
+  async function generateWithExclusions(ws, prompt, system, readItems, references = [], plan = null) {
+    ContentMemory.ensure(ws);
     const materialContext = MaterialCatalog.prepareGeneration(ws);
-    const catalogContext = MaterialCatalog.contextText(materialContext);
-    let materialFeedback = '';
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const excluded = excludedIdeas(ws);
-      const manual = excluded.filter(exclusionLabel);
-      const exclusions = excluded.map(idea => ({
-        id: idea.id, title: idea.title, insight: idea.insight, status: exclusionLabel(idea) || 'متشبع', reason: idea.exclusionReason || 'سبب غير مسجّل في النسخة القديمة'
-      }));
-      const rule = 'استبعد الزوايا التالية من كل نتيجة حتى لو تغير العنوان أو الصياغة، وحتى لو طلبت الملاحظة إعادة استخدامها.';
-      const result = await callGeminiJSON(prompt + '\n' + publishedContext + '\n' + catalogContext + '\n' + materialFeedback + '\n' + rule + '\n' + JSON.stringify(exclusions),
-        [system, CONTENT_LANGUAGE, 'كتالوج الخامات المعتمد المرفق هو المصدر الوحيد لمواصفات الخامات. لا تستكمل معلومة ناقصة من معرفتك أو الصور أو الهوية أو العروض أو ملاحظات المستخدم. لا تستخدم بيانات المسودات. أخرج materialIds لكل نتيجة، واربط أي اسم خامة أو مواصفة بالمعرّف المعتمد المناسب. المحتوى العام يستخدم materialIds=[] و material=غير محدد من غير ادعاءات عن خامة.'].filter(Boolean).join('\n'), references);
-      let items;
-      try { items = MaterialCatalog.groundItems(readItems(result), materialContext); }
-      catch (error) { materialFeedback = error.message + ' صحّح materialIds والتزم بالكتالوج فقط.'; continue; }
-      if (ContentMemory.isDuplicate(ws, items)) { materialFeedback = 'التوليد كرّر منشور أو عنوان من سجل المنشور. اكتب فكرة ومعالجة مختلفة.'; continue; }
-      if (items.some(item => excludedIdeas(ws).some(idea => matchesIdea(idea, item)))) continue;
-
-      if (manual.length > 0) {
-        const candidates = items.map(({ title, ideaTitle, insight, copy }) => ({ title, ideaTitle, insight, copy }));
-        const review = await callGeminiJSON(JSON.stringify({ excluded: manual.map(({ title, insight, exclusionReason }) => ({ title, insight, reason: exclusionReason || 'غير مسجّل' })), candidates }),
-          'راجع الزوايا التسويقية. أعد JSON بالشكل {"allowed":true} فقط إذا كانت كل الزوايا المقترحة مختلفة في المعنى عن الزوايا المستبعدة. إذا تكررت أي زاوية ولو بصياغة مختلفة، أعد {"allowed":false}.');
-        if (review?.allowed !== true) continue;
-      }
-
-      const current = excludedIdeas(ws);
-      if (current.some(idea => !excluded.includes(idea) || (exclusionLabel(idea) && !manual.includes(idea)))) continue;
-      return items.map(item => ({ ...item, referenceImages: references.map(referenceSnapshot) }));
+    const excluded = excludedIdeas(ws).map(idea => ({id:idea.id,title:idea.title,insight:idea.insight,status:exclusionLabel(idea) || 'متشبع',reason:idea.exclusionReason || ''}));
+    const state = JSON.stringify([excluded, plan]);
+    const planText = plan ? '\n[LOCAL APPROVED ANGLE PLAN]\n' + JSON.stringify(plan) + '\nاكتب بوست واحد لكل زاوية مخططة وبنفس الترتيب. ideaId و ideaTitle و segment ثابتين من الخطة. ممنوع اختيار زاوية جديدة أو تغيير معنى الزاوية أو تنفيذ ملاحظة تطلب زاوية مستبعدة.' : '';
+    const result = await callGeminiJSON(prompt + '\n' + ContentMemory.historyContext(ws) + '\n' + MaterialCatalog.contextText(materialContext) + planText
+      + '\nاستبعد الزوايا التالية بالمعنى حتى لو تغيرت الصياغة:\n' + JSON.stringify(excluded),
+      [system, CONTENT_LANGUAGE, 'كتالوج الخامات المعتمد هو المصدر الوحيد للمواصفات. البيانات الناقصة تظل ناقصة. أخرج materialIds لكل نتيجة؛ المحتوى العام يستخدم materialIds=[] وmaterial=غير محدد.'].filter(Boolean).join('\n'), references, true);
+    // Validation never starts a paid review or an automatic regeneration.
+    let items = MaterialCatalog.groundItems(readItems(result), materialContext);
+    if (plan) {
+      const current = preparePostGeneration(ws, plan.length, plan.length === 1 ? plan[0].id : '');
+      const currentExcluded = excludedIdeas(ws).map(idea => ({id:idea.id,title:idea.title,insight:idea.insight,status:exclusionLabel(idea) || 'متشبع',reason:idea.exclusionReason || ''}));
+      if (JSON.stringify([currentExcluded,current]) !== state) throw new Error('حالة الزوايا اتغيرت أثناء الطلب. مفيش طلب إضافي اتبعت.');
+      if (items.length !== plan.length || items.some((item,index) => item.ideaId !== plan[index].id)) throw new Error('الرد خرج عن خطة الزوايا المحددة. مفيش إعادة توليد تلقائية أو طلب مراجعة إضافي.');
     }
-    throw new Error(materialFeedback || 'التوليد رجّع زاوية مستبعدة. جرّب التوليد مرة تانية.');
+    if (ContentMemory.isDuplicate(ws,items) || items.some(item => excludedIdeas(ws).some(idea => matchesIdea(idea,item)))) throw new Error('الرد كرر محتوى أو زاوية مستبعدة رغم الخطة. مفيش إعادة تلقائية؛ راجع الزوايا قبل طلب جديد.');
+    if (plan) items = items.map((item,index) => ({...item,ideaId:plan[index].id,ideaTitle:plan[index].title,segment:plan[index].segment,isNewIdea:false}));
+    return items.map(item => ({...item,referenceImages:references.map(referenceSnapshot)}));
   }
 
   function buildCompactContext(ws) {
@@ -98,11 +108,11 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
 أفكار مشبعة (ممنوع تكرارها): ${saturated || 'لا يوجد'}`.trim();
   }
 
-  async function fetchGeminiWithFallback(payload) {
+  async function fetchGeminiWithFallback(payload, singleAttempt = false) {
     const apiKey = getApiKey();
     let lastError = '';
 
-    for (const model of TEXT_MODELS) {
+    for (const model of (singleAttempt ? TEXT_MODELS.slice(0,1) : TEXT_MODELS)) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 60000);
@@ -121,7 +131,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
         lastError = `(${res.status}): ${errText}`;
 
         // جرّب الموديل اللي بعده في الأخطاء المؤقتة
-        if ([404, 429, 500, 502, 503, 504].includes(res.status)) {
+        if (!singleAttempt && [404, 429, 500, 502, 503, 504].includes(res.status)) {
           await new Promise(r => setTimeout(r, 800));
           continue;
         }
@@ -151,7 +161,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     });
   }
 
-  async function callGeminiJSON(promptText, systemInstruction = '', references = []) {
+  async function callGeminiJSON(promptText, systemInstruction = '', references = [], singleAttempt = false) {
     const payload = {
       contents: [{ role: 'user', parts: [...imageParts(references), { text: promptText }] }],
       generationConfig: {
@@ -165,7 +175,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
       payload.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
 
-    const data = await fetchGeminiWithFallback(payload);
+    const data = await fetchGeminiWithFallback(payload, singleAttempt);
     const rawText = data?.candidates?.[0]?.content?.parts?.filter(part => !part.thought && typeof part.text === 'string').map(part => part.text).join('');
     if (!rawText) throw new Error('لم يتم استلام رد صالح من Gemini API.');
 
@@ -182,6 +192,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
   }
 
   async function generateCalendar8(ws, references = []) {
+    const plan = preparePostGeneration(ws, 8);
     const context = buildCompactContext(ws);
     const sys = 'أنت مدير تسويق واستراتيجي محتوى محترف. تلتزم حرفياً بهوية البراند وقواعده النشطة، وتحقق هدف الفترة، وتتجنب الأفكار المشبعة تماماً. تخرج النتيجة كـ JSON فقط.';
 
@@ -189,7 +200,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
 
 المطلوب:
 توليد كاليندر فيسبوك متكاملة مكونة من 8 بوستات متنوعة ومتوازنة تخدم هدف الفترة وتلتزم بالقواعد.
-- استخدم الأفكار المتاحة غير المشبعة قدر الإمكان، وإذا احتجت أفكاراً إضافية لتكملة الـ 8 بوستات ابتكر أفكاراً جديدة غير مكررة.
+- الزوايا متحددة مسبقًا في LOCAL APPROVED ANGLE PLAN. لا تبتكر زوايا بديلة.
 - لكل بوست، اكتب التفاصيل الكاملة للتيم (النص النهائي، الفكرة، الخامة، تصور الصورة بدقة، درجة الألوان، الجو العام، وبريف واضح للتعديل للديزاينر).
 
 أخرج النتيجة بصيغة JSON مطابقة تماماً لهذا الهيكل:
@@ -198,9 +209,9 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     {
       "title": "عنوان مختصر للفكرة",
       "materialIds": ["معرّف خامة من الكتالوج أو مصفوفة فارغة للمحتوى العام"],
-      "ideaId": "ID الفكرة من القائمة إن وجد أو new",
+      "ideaId": "معرّف الزاوية المحددة في LOCAL APPROVED ANGLE PLAN",
       "ideaTitle": "اسم الفكرة أو الزاوية",
-      "isNewIdea": true,
+      "isNewIdea": false,
       "segment": "B2C أو B2B",
       "material": "اسم البطاقة المرتبطة بـ materialIds أو غير محدد للمحتوى العام",
       "copy": "نص البوست الكامل الجاهز للنشر على فيسبوك بأسلوب البراند",
@@ -216,15 +227,16 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
         throw new Error('تنسيق الكاليندر العائد من الذكاء الاصطناعي غير مكتمل.');
       }
       return result.posts;
-    }, references);
+    }, references, plan);
   }
 
-  async function generateSinglePost(ws, customNote = '', references = []) {
+  async function generateSinglePost(ws, customNote = '', references = [], selectedId = '') {
+    const plan = preparePostGeneration(ws, 1, selectedId);
     const context = buildCompactContext(ws);
     const sys = 'أنت مدير تسويق محترف. تلتزم بهوية البراند والقواعد وتخرج بوست واحد متكامل التفاصيل بصيغة JSON فقط.';
 
     const prompt = `${context}
-ملاحظة إضافية من المدير: ${customNote || 'اختر أفضل زاوية غير مشبعة تخدم هدف الفترة'}
+ملاحظة إضافية من المدير: ${customNote || 'اكتب المعالجة المناسبة للزاوية المحددة في الخطة'}
 
 المطلوب: توليد بوست فيسبوك واحد متكامل بالتفاصيل الكاملة للتيم.
 أخرج JSON مطابقاً لهذا الشكل:
@@ -232,9 +244,9 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
   "post": {
     "title": "عنوان مختصر للفكرة",
     "materialIds": ["معرّف خامة من الكتالوج أو مصفوفة فارغة للمحتوى العام"],
-    "ideaId": "ID الفكرة من القائمة إن وجد أو new",
+    "ideaId": "معرّف الزاوية المحددة في LOCAL APPROVED ANGLE PLAN",
     "ideaTitle": "اسم الفكرة أو الزاوية",
-    "isNewIdea": true,
+    "isNewIdea": false,
     "segment": "B2C أو B2B",
     "material": "اسم البطاقة المرتبطة بـ materialIds أو غير محدد للمحتوى العام",
     "copy": "نص البوست الكامل الجاهز للنشر",
@@ -247,7 +259,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
     const [post] = await generateWithExclusions(ws, prompt, sys, result => {
       if (!result?.post) throw new Error('تعذر توليد البوست الفردي.');
       return [result.post];
-    }, references);
+    }, references, plan);
     return post;
   }
 
@@ -280,6 +292,7 @@ ${ws.goal?.objective || 'بناء الوعي وجذب عملاء مؤهلين'}
   }
 
   async function regeneratePostPart(post, part, note, inputs) {
+    if (inputs.context.angle?.excluded || inputs.context.angle?.saturation >= 75) throw new Error('زاوية البوست مستبعدة أو مشبعة؛ لم يتم إرسال طلب إعادة توليد.');
     const labels = { hook: 'الهوك: أول سطر غير فارغ فقط، سطر واحد لحد 300 حرف', copy: 'نص البوست كامل بما فيه الهوك', visual: 'تصور الصورة فقط', brief: 'بريف الديزاينر فقط' };
     if (!Object.hasOwn(labels, part)) throw new Error('جزء البوست غير صالح.');
     const prompt = 'أعد كتابة الجزء المحدد فقط: ' + labels[part] + '\nملاحظة المدير: ' + note
@@ -385,6 +398,9 @@ ${yesterdaySummary ? JSON.stringify(yesterdaySummary, null, 2) : 'لا توجد 
   }
 
   return {
+    eligibleIdeas,
+    preparePostGeneration,
+    assertPostAngleAllowed,
     regeneratePostPart,
     reviewPost,
     describeReference,
@@ -398,6 +414,3 @@ ${yesterdaySummary ? JSON.stringify(yesterdaySummary, null, 2) : 'لا توجد 
     analyzeAdsWithRules
   };
 })();
-
-
-

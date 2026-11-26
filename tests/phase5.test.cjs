@@ -136,6 +136,8 @@ test('Unsaved text survives refresh and blocks destructive writer actions until 
 
 test('Review UI escapes model output and long exclusion reasons stay valid',async()=>{
  const h=await setup(),post=addPost(h);h.scope.ContentMemory.applyExclusion(h.ws,{kind:'post',index:0,status:'rejected'},'ر'.repeat(2000));
+ const localResult=await h.workshop.review(h.ws,post);assert(localResult.semanticStatus==='unavailable'&&localResult.issues.every(issue=>issue.message.length<=1500));
+ h.scope.ContentMemory.allowIdea(h.ws,h.ws.ideas.findIndex(idea=>idea.id===post.ideaId));
  h.api.reviewPost=async()=>({summary:'<script>summary</script>',issues:[info({message:'<img onerror=alert(1)>',suggestion:'<script>bad</script>'})]});await h.workshop.openReview();
  assert(h.element('review-issues').innerHTML.includes('&lt;img')&&!h.element('review-issues').innerHTML.includes('<script>bad'));
  assert(post.reviewResult.issues.every(issue=>issue.message.length<=1500));

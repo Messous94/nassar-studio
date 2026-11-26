@@ -1,7 +1,7 @@
 // Run: node tests/phase2.test.cjs (Node 18+, no dependencies).
 const fs = require('node:fs');
 const path = require('node:path');
-const { harness, assert } = require('./phase1.test.cjs');
+const { harness, assert, seedAngles, plannedReply } = require('./phase1.test.cjs');
 const source = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZfoAAAAASUVORK5CYII=';
 const id = n => 'ref-00000000-0000-4000-8000-' + String(n).padStart(12, '0');
@@ -32,6 +32,7 @@ async function add(h,n) {
   ws.assets.references.push(ref(n));return ws;
 }
 function enableAI(h) {
+  seedAngles(h);
   h.googleCalls=[];
   h.scope.fetch=async(url,options)=>{
     const payload=JSON.parse(options.body);h.googleCalls.push(payload);
@@ -42,7 +43,7 @@ function enableAI(h) {
     else if(text.includes('توليد كاليندر فيسبوك'))result={posts:Array.from({length:8},(_,i)=>({title:'بوست '+i}))};
     else if(text.includes('توليد بوست فيسبوك واحد'))result={post:{title:'بوست بالصور'}};
     else result={ideas:[{title:'زاوية بالصورة',insight:'تفاصيل ظاهرة',segment:'B2C'}]};
-    return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(result)}]}}]})};
+    return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(plannedReply(payload,result))}]}}]})};
   };
   const ai=h.evaluate(source('js/ai-engine.js'),'AIEngine');Object.assign(h.api,ai);
   return ai;

@@ -142,6 +142,7 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2 shrink-0">
+          <select id="generation-angle" aria-label="زاوية البوست قبل التوليد" class="max-w-full px-3 py-2 rounded-lg text-xs bg-stoneBg border border-borderSubtle"><option value="">اختيار محلي لأقل زاوية تشبعًا</option></select>
           <input id="single-post-note" type="text" placeholder="ملاحظة لبوست سريع (اختياري)..." class="px-3 py-2 rounded-lg text-xs bg-stoneBg border border-borderSubtle focus:outline-none focus:border-bronze w-48" />
           <button id="btn-gen-single" onclick="ContentStudio.handleGenerateSinglePost()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-stoneBg hover:bg-borderSubtle/60 text-ink border border-borderSubtle transition">
             + بوست فردي
@@ -160,7 +161,7 @@
       </div>
 
       <div class="glass-card rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div class="space-y-1"><p id="reference-selection-summary">التوليد من غير صور مختارة</p><p id="material-generation-summary" class="text-muted"></p></div>
+        <div class="space-y-1"><p id="reference-selection-summary">التوليد من غير صور مختارة</p><p id="generation-plan-summary" class="text-muted"></p><details><summary class="cursor-pointer">زوايا الكاليندر المتاحة قبل التوليد</summary><ol id="generation-plan-list" class="list-decimal list-inside space-y-1 mt-2"></ol></details><p id="material-generation-summary" class="text-muted"></p></div>
         <button onclick="App.switchTab('assets')" class="font-bold text-bronze">اختيار صور للتوليد</button>
       </div>
 
@@ -172,7 +173,7 @@
           <div class="px-4 py-3.5 border-b border-borderSubtle flex items-center justify-between">
             <div>
               <h2 class="text-sm font-bold text-ink">جدول الكاليندر والبوستات</h2>
-              <p class="text-xs text-muted">اضغط على أي بوست لمراجعة البريف الكامل أو اضغط على الحالة لتغييرها (الاعتماد يزيد التشبع تلقائياً)</p>
+              <p class="text-xs text-muted">اضغط على أي بوست لمراجعة البريف الكامل أو اضغط على الحالة لتغييرها (التشبع بيتحسب عند تسجيل النشر)</p>
             </div>
           </div>
 
@@ -722,15 +723,15 @@
   <div id="toast" role="status" aria-live="polite" class="fixed bottom-5 left-5 right-5 sm:right-auto sm:max-w-lg bg-ink text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
 
   <!-- Modular Scripts -->
-  <script src="js/storage.js?v=10"></script>
-  <script src="js/asset-library.js?v=10"></script>
-  <script src="js/material-catalog.js?v=10"></script>
-  <script src="js/content-memory.js?v=10"></script>
-  <script src="js/post-workshop.js?v=10"></script>
-  <script src="js/content-performance.js?v=10"></script>
-  <script src="js/ai-engine.js?v=10"></script>
-  <script charset="UTF-8" src="js/content-studio.js?v=10"></script>
-  <script src="js/ads-intel.js?v=10"></script>
+  <script src="js/storage.js?v=11"></script>
+  <script src="js/asset-library.js?v=11"></script>
+  <script src="js/material-catalog.js?v=11"></script>
+  <script src="js/content-memory.js?v=11"></script>
+  <script src="js/post-workshop.js?v=11"></script>
+  <script src="js/content-performance.js?v=11"></script>
+  <script src="js/ai-engine.js?v=11"></script>
+  <script charset="UTF-8" src="js/content-studio.js?v=11"></script>
+  <script src="js/ads-intel.js?v=11"></script>
 
   <!-- Main Application Controller -->
   <script>
@@ -1171,7 +1172,3 @@
   </script>
 </body>
 </html>
-
-
-
-

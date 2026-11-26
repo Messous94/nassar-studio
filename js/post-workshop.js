@@ -22,11 +22,11 @@ const PostWorkshop = (() => {
   function reviewInput(workspace,post){
     ContentMemory.ensure(workspace);MaterialCatalog.ensure(workspace);
     const ids=post.materialIds||[],catalog=workspace.brandCore.materialCatalog.filter(item=>ids.includes(item.id)).map(item=>({...facts(item),status:item.status,source:item.source}));
-    const related=workspace.ideas.find(idea=>AIEngine.matchesIdea(idea,post));
+    const related=workspace.ideas.find(idea=>AIEngine.matchesIdea(idea,post)&&(AIEngine.exclusionLabel(idea)||idea.saturation>=75))||workspace.ideas.find(idea=>AIEngine.matchesIdea(idea,post));
     const history={...workspace,publicationHistory:(workspace.publicationHistory||[]).filter(entry=>entry.sourcePostId!==post.id)};
     return {post:{title:post.title||'',...editable(post),material:post.material||'',materialIds:ids,materialSnapshots:(post.materialSnapshots||[]).map(facts),referenceImages:clone(post.referenceImages||[])},
       brand:{identity:workspace.brandCore.identity,tone:workspace.brandCore.tone,rules:(workspace.brandCore.rules||[]).slice(0,15)},catalog,
-      excluded:workspace.ideas.filter(idea=>AIEngine.exclusionLabel(idea)).map(idea=>({id:idea.id,title:idea.title,status:idea.status,reason:idea.exclusionReason||''})),
+      excluded:workspace.ideas.filter(idea=>AIEngine.exclusionLabel(idea)||idea.saturation>=75).map(idea=>({id:idea.id,title:idea.title,status:AIEngine.exclusionLabel(idea)||'متشبع',saturation:idea.saturation,reason:idea.exclusionReason||''})),
       angle:{title:related?.title||post.ideaTitle||post.title||'',excluded:related?AIEngine.exclusionLabel(related):'',saturation:related?.saturation||0,reason:related?.exclusionReason||''},
       publishedMemory:ContentMemory.historyContext(history),semanticConfigured:Boolean(StorageEngine.getConfig().geminiKey)};
   }
@@ -43,7 +43,7 @@ const PostWorkshop = (() => {
     }
     const duplicate=(workspace.publicationHistory||[]).find(entry=>!entry.voided&&entry.sourcePostId!==post.id&&((normalize(post.title)&&normalize(post.title)===normalize(entry.title))||(normalize(post.copy)&&normalize(post.copy)===normalize(entry.copy))));
     if(duplicate)add('similarity','error','في عنوان أو نص مطابق لمنشور مسجّل: '+duplicate.title,normalize(post.copy)===normalize(duplicate.copy)?post.copy:post.title,'استخدم معالجة وعنوان مختلفين.');
-    const angle=workspace.ideas.find(idea=>AIEngine.matchesIdea(idea,post));
+    const angle=workspace.ideas.find(idea=>AIEngine.matchesIdea(idea,post)&&(AIEngine.exclusionLabel(idea)||idea.saturation>=75))||workspace.ideas.find(idea=>AIEngine.matchesIdea(idea,post));
     if(angle&&AIEngine.exclusionLabel(angle))add('rules','error','الزاوية مستبعدة يدويًا: '+(angle.exclusionReason||'السبب غير مسجّل'),angle.title);
     else if(angle?.saturation>=75)add('similarity','warning','تشبع الزاوية وصل '+angle.saturation+'%. راجع المسافة الإبداعية.',angle.title);
     const formal=String(post.copy||'').match(/(?:^|[\s،.؟!])(يرجى|يمكنكم|سوف|لماذا|اكتشفوا)(?=$|[\s،.؟!])/);
@@ -60,6 +60,8 @@ const PostWorkshop = (() => {
   async function review(workspace,post,force=false){const stamp=currentStamp(workspace,post);
     if(!force&&post.reviewResult?.version===1&&post.reviewResult.semanticStatus==='complete'&&post.reviewResult.stamp===stamp)return clone(post.reviewResult);
     const input=reviewInput(workspace,post),issues=localIssues(workspace,post);let semanticStatus='complete',summary='';
+    const blocked=workspace.ideas.some(idea=>AIEngine.matchesIdea(idea,post)&&(AIEngine.exclusionLabel(idea)||idea.saturation>=75));
+    if(blocked){const result={version:1,stamp,reviewedAt:new Date().toISOString(),semanticStatus:'unavailable',summary:'الفحص المحلي اكتشف زاوية مستبعدة أو مشبعة. المراجعة الدلالية لم تُطلب لتوفير الـAPI؛ راجع الزاوية الأول.',issues};StorageEngine.validatePostReview(result);return result;}
     try{const raw=await AIEngine.reviewPost(input);issues.push(...modelIssues(raw,post));summary=raw.summary;}
     catch(error){semanticStatus='unavailable';summary='المراجعة الدلالية مش متاحة. النتائج الظاهرة فحص محلي فقط.';issues.push({category:'review',severity:'warning',message:('اللهجة والقواعد والادعاءات والتشابه في المعنى محتاجين مراجعة يدوية. '+StorageEngine.describeError(error)).slice(0,1500),evidence:'',suggestion:'راجع المحتوى بنفسك أو أعد المراجعة بعد حل مشكلة الاتصال أو المفتاح.',source:'local'});}
     if(currentStamp(workspace,post)!==stamp)throw new Error('البوست أو بيانات مراجعته اتغيرت أثناء المراجعة. أعد المراجعة على النسخة الحالية.');
@@ -82,7 +84,7 @@ const PostWorkshop = (() => {
     if(part==='hook'){const copy=String(post.copy||''),range=hookRange(copy);return{copy:copy.slice(0,range.start)+text+copy.slice(range.end)};}
     return{[PARTS[part].field]:text};
   }
-  async function regenerationInputs(workspace,post){const ids=post.materialIds||[];let materials=[];
+  async function regenerationInputs(workspace,post){AIEngine.assertPostAngleAllowed(workspace,post);const ids=post.materialIds||[];let materials=[];
     if(ids.length){const scoped={...workspace,brandCore:{...workspace.brandCore,materialScope:'selected',selectedMaterialIds:[...ids]}};materials=MaterialCatalog.prepareGeneration(scoped).materials;
       for(const material of materials){const old=(post.materialSnapshots||[]).find(item=>item.id===material.id);if(!old||JSON.stringify(facts(old))!==JSON.stringify(facts(material)))throw new Error('بيانات خامة البوست اتغيرت. راجع البوست والكتالوج قبل إعادة توليد جزء منه.');}}
     const owner=App.getWorkspaceCompanyId(workspace),references=await Promise.all((post.referenceImages||[]).map(async ref=>({...clone(ref),image:await StorageEngine.loadReferenceImage(owner,ref.id)})));
@@ -138,4 +140,3 @@ const PostWorkshop = (() => {
   function markDirty(){const post=selected();if(post)render(App.getCurrentWorkspace(),post);}
   return {PARTS,isBusy,hasUnsavedCopy,requireSavedCopy,canLeave,renderCopy,currentStamp,reviewInput,localIssues,review,applyChange,partText,partPatch,regenerationInputs,openEditor,closeEditor,updatePart,generateAlternative,applyAlternative,saveManualCopy,restoreVersion,openReview,closeReview,requestApproval,approveWithNotes,approvalConfirmed,render,markDirty};
 })();
-
