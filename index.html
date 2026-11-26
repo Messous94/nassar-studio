@@ -10,6 +10,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
+  .generation-toolbar { display: grid; gap: 16px; min-width: 0; }
+  .generation-saturation { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+  .generation-saturation > span { flex: 0 0 auto; }
+  #saturation-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 320px; min-width: 0; }
+  #saturation-pills > span { max-width: 100%; overflow-wrap: anywhere; }
+  .generation-actions { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 8px; min-width: 0; }
+  .generation-actions > * { width: 100%; min-width: 0; max-width: 100%; }
+  .generation-actions > button { white-space: normal; overflow-wrap: anywhere; }
+  @media (min-width: 480px) {
+    .generation-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .generation-actions > select { grid-column: span 2; }
+  }
+  @media (min-width: 1024px) {
+    .generation-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
   .publication-card { display: grid; gap: 10px; padding: 16px; border: 1px solid #E6E4DD; border-radius: 12px; min-width: 0; overflow-wrap: anywhere; }
   .publication-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
   .material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 14px; }
@@ -135,13 +150,13 @@
       </div>
 
       <!-- Saturation Strip & Generation Actions -->
-      <div class="glass-card rounded-xl p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div class="flex flex-wrap items-center gap-2">
+      <div class="glass-card rounded-xl p-4 generation-toolbar">
+        <div class="generation-saturation">
           <span class="text-xs font-bold text-ink ml-1"><i class="fa-solid fa-gauge-high text-bronze ml-1"></i>حالة تشبع الأفكار:</span>
           <div id="saturation-pills" class="flex flex-wrap items-center gap-1.5"></div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 shrink-0">
+        <div class="generation-actions">
           <select id="generation-angle" aria-label="زاوية البوست قبل التوليد" class="max-w-full px-3 py-2 rounded-lg text-xs bg-stoneBg border border-borderSubtle"><option value="">اختيار محلي لأقل زاوية تشبعًا</option></select>
           <input id="single-post-note" type="text" placeholder="ملاحظة لبوست سريع (اختياري)..." class="px-3 py-2 rounded-lg text-xs bg-stoneBg border border-borderSubtle focus:outline-none focus:border-bronze w-48" />
           <button id="btn-gen-single" onclick="ContentStudio.handleGenerateSinglePost()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-stoneBg hover:bg-borderSubtle/60 text-ink border border-borderSubtle transition">
